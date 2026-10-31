@@ -1,12 +1,8 @@
 #!/bin/sh
-# Compile pour Raspberry Pi 5 (OS 64 bits). Nécessite `cross` (Docker) ou `cargo-zigbuild` (+ zig).
+# Compile pour Raspberry Pi 5 (OS 64 bits, glibc 2.36 = Bookworm) depuis macOS.
+# Prérequis : voir docs/install.md (rustup, zig, cargo-zigbuild, cible aarch64).
 set -e
+export PATH="$(brew --prefix rustup 2>/dev/null)/bin:$PATH"
 TARGET=aarch64-unknown-linux-gnu
-if command -v cross >/dev/null; then
-  cross build --release --target "$TARGET"
-elif command -v cargo-zigbuild >/dev/null; then
-  cargo zigbuild --release --target "$TARGET"
-else
-  echo "Installer 'cross' (cargo install cross) ou 'cargo-zigbuild'." >&2; exit 1
-fi
+cargo zigbuild --release --target "$TARGET.2.36"
 echo "Binaire : target/$TARGET/release/rpi-monitor"

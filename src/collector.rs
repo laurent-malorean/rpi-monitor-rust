@@ -140,7 +140,7 @@ fn run(mut sensors: Box<dyn Sensors>, history: Arc<Mutex<History>>, stop: Receiv
         let ts = now_s();
         let fan = safe(|| sensors.fan());
         lock(&history).record_fast(ts, fan);
-        if tick % SLOW_EVERY == 0 {
+        if tick.is_multiple_of(SLOW_EVERY) {
             let r = Readings {
                 cpu: safe(|| sensors.cpu_percent()),
                 freq: safe(|| sensors.cpu_freq_mhz()),
