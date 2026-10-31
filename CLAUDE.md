@@ -12,7 +12,7 @@ Tout développement doit suivre strictement le cycle **Test-Driven Development**
 
 Répéter ce cycle pour chaque nouvelle fonctionnalité ou correction de bug : jamais de code de production écrit avant son test correspondant.
 
-4. **Vocabulaire** — avant de commiter, se demander : (a) le code/les tests utilisent-ils le vocabulaire déjà défini dans `docs/ontology.md` ? (b) ce dev introduit-il une notion métier absente de l'ontologie, ou change-t-il le sens d'une notion existante ? Si oui, mettre à jour `docs/ontology.md` dans le même commit. Le hook pre-commit affiche un rappel non bloquant (`scripts/check_ontology.sh`) listant les nouveaux `pub fn`/`struct`/`enum` absents de l'ontologie — ce n'est qu'un aide-mémoire : la plupart seront de l'implémentation pure et n'ont rien à y faire.
+4. **Vocabulaire** — avant de commiter, se demander : (a) le code/les tests utilisent-ils le vocabulaire déjà défini dans `docs/ontology.md` ? (b) ce dev introduit-il une notion métier absente de l'ontologie, ou change-t-il le sens d'une notion existante ? Si oui, mettre à jour `docs/ontology.md` dans le même commit. Le hook pre-commit affiche un rappel non bloquant (`scripts/check_ontology.sh`) listant les nouveaux `pub fn`/`struct`/`enum` absents de l'ontologie — ce n'est qu'un aide-mémoire : la plupart seront de l'implémentation pure et n'ont rien à y faire. En revanche `tests/ontology.rs` est bloquant : chaque fichier et chaque symbole cités dans la colonne « Où dans le code » doivent exister. Déplacer ou renommer du code cité impose donc de corriger l'ontologie dans le même commit — c'est à l'agent de le faire, pas à l'utilisateur.
 
 ## Documentation vivante
 
@@ -31,13 +31,13 @@ Quand l'utilisateur demande de commiter :
 
 - Découper les changements en un ou plusieurs commits **atomiques** (un commit = un changement logique cohérent, pas un fourre-tout).
 - Rédiger chaque message au format **Conventional Commits** : `<type>(<scope facultatif>): <description>` (types usuels : `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `style`, `perf`).
-- Après les commits, **pousser automatiquement sur le remote** (`git push`) sans attendre de confirmation supplémentaire, sauf si le push nécessite une action destructive (force push, etc.), auquel cas demander confirmation avant de continuer. (Tant qu'aucun remote n'est configuré, le push est sans objet.)
+- Après les commits, **pousser automatiquement sur le remote** (`git push`) sans attendre de confirmation supplémentaire, sauf si le push nécessite une action destructive (force push, etc.), auquel cas demander confirmation avant de continuer.
 
 ## Dépendances et environnement
 
 - Gestion avec **cargo** (`Cargo.toml` + `Cargo.lock`, versionné car c'est un binaire). Peu de dépendances, de préférence en Rust pur (cross-compilation Pi sans toolchain C) : `ratatui` seul pour l'UI.
 - Commandes usuelles : `cargo build`, `cargo test` (tests), `cargo run -- --demo` (données synthétiques, automatique hors Linux), `cargo run` (capteurs réels, sur le Pi), `cargo clippy`.
-- Build Pi : `scripts/build-pi.sh` (cible `aarch64-unknown-linux-gnu`, via `cross` ou `cargo-zigbuild`). Voir README.
+- Build Pi : `scripts/build-pi.sh` (cible `aarch64-unknown-linux-gnu` via `cargo-zigbuild`, résultat dans `dist/rpi-monitor`). Voir `docs/install.md`.
 
 ## Hook pre-commit
 
