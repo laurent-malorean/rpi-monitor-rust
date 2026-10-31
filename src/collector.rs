@@ -1,0 +1,324 @@
+//! Thread de collecte + historiques. Indépendant de l'affichage.
+//! (Les capteurs eux-mêmes sont dans `sensors/` ; ici : planification et stockage.)
+
+use crate::history::{BucketSeries, RingBuffer, Stats};
+use crate::sensors::{parse_throttled, FanReading, Sensors, Throttle};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+pub const HISTORY_S: usize = 30 * 60;
+const BUCKET_S: f64 = 10.0;
+const FAST: Duration = Duration::from_millis(500); // ventilateur
+const SLOW_EVERY: u32 = 2; // autres métriques : 1 s
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Key {
+    Cpu,
+    Freq,
+    Power,
+    Ram,
+    Temp,
+    Fan,
+    Throttle,
+}
+
+/// Copie des données d'un indicateur, prise sous verrou.
+#[derive(Debug, Clone)]
+pub struct Snapshot {
+    pub values: Vec<f64>,
+    pub last: Option<f64>,
+    pub stats: Option<Stats>,
+}
+
+/// Mesures lentes (1 s) d'un relevé.
+#[derive(Debug, Clone, Default)]
+pub struct Readings {
+    pub cpu: Option<f64>,
+    pub freq: Option<f64>,
+    pub power: Option<f64>,
+    pub ram: Option<f64>,
+    pub temp: Option<f64>,
+    pub throttle: Option<Throttle>,
+}
+
+/// Historiques de tous les indicateurs (30 min) + dernières lectures détaillées.
+pub struct History {
+    rings: [RingBuffer; 5], // cpu, freq, power, ram, temp
+    fan: BucketSeries,
+    throttle: BucketSeries,
+    fan_last: Option<FanReading>,
+    throttle_last: Option<Throttle>,
+}
+
+fn ring_index(key: Key) -> Option<usize> {
+    match key {
+        Key::Cpu => Some(0),
+        Key::Freq => Some(1),
+        Key::Power => Some(2),
+        Key::Ram => Some(3),
+        Key::Temp => Some(4),
+        Key::Fan | Key::Throttle => None,
+    }
+}
+
+impl History {
+    pub fn new() -> Self {
+        Self {
+            rings: std::array::from_fn(|_| RingBuffer::new(HISTORY_S)),
+            fan: BucketSeries::new(BUCKET_S, HISTORY_S / BUCKET_S as usize),
+            throttle: BucketSeries::new(BUCKET_S, HISTORY_S / BUCKET_S as usize),
+            fan_last: None,
+            throttle_last: None,
+        }
+    }
+
+    pub fn record_fast(&mut self, ts: f64, fan: Option<FanReading>) {
+        self.fan.add(ts, fan.and_then(|f| f.active()));
+        self.fan_last = fan;
+    }
+
+    pub fn record_slow(&mut self, ts: f64, r: &Readings) {
+        for (ring, v) in self.rings.iter_mut().zip([r.cpu, r.freq, r.power, r.ram, r.temp]) {
+            ring.add(v);
+        }
+        self.throttle.add(ts, r.throttle.as_ref().map(Throttle::active));
+        self.throttle_last = r.throttle.clone();
+    }
+
+    pub fn snapshot(&self, key: Key) -> Snapshot {
+        match (ring_index(key), key) {
+            (Some(i), _) => {
+                let r = &self.rings[i];
+                Snapshot { values: r.values(), last: r.last(), stats: r.stats() }
+            }
+            (None, Key::Fan) => bucket_snapshot(&self.fan),
+            _ => bucket_snapshot(&self.throttle),
+        }
+    }
+
+    pub fn fan_last(&self) -> Option<FanReading> {
+        self.fan_last
+    }
+
+    pub fn throttle_last(&self) -> Option<Throttle> {
+        self.throttle_last.clone()
+    }
+
+    pub fn reset(&mut self) {
+        self.rings.iter_mut().for_each(RingBuffer::clear);
+        self.fan.clear();
+        self.throttle.clear();
+    }
+}
+
+impl Default for History {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn bucket_snapshot(b: &BucketSeries) -> Snapshot {
+    Snapshot { values: b.values(), last: b.last(), stats: b.stats() }
+}
+
+/// Un capteur en échec ou qui panique donne `None` : la collecte ne s'arrête jamais.
+fn safe<T>(f: impl FnOnce() -> Option<T>) -> Option<T> {
+    catch_unwind(AssertUnwindSafe(f)).ok().flatten()
+}
+
+fn now_s() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
+}
+
+fn run(mut sensors: Box<dyn Sensors>, history: Arc<Mutex<History>>, stop: Receiver<()>) {
+    let start = Instant::now();
+    let mut tick: u32 = 0;
+    loop {
+        let ts = now_s();
+        let fan = safe(|| sensors.fan());
+        lock(&history).record_fast(ts, fan);
+        if tick % SLOW_EVERY == 0 {
+            let r = Readings {
+                cpu: safe(|| sensors.cpu_percent()),
+                freq: safe(|| sensors.cpu_freq_mhz()),
+                power: safe(|| sensors.power_w()),
+                ram: safe(|| sensors.ram_percent()),
+                temp: safe(|| sensors.temperature_c()),
+                throttle: safe(|| sensors.throttled()).map(parse_throttled),
+            };
+            lock(&history).record_slow(ts, &r);
+        }
+        tick += 1;
+        // horloge monotone : pas de dérive cumulée
+        let wait = (start + FAST * tick).saturating_duration_since(Instant::now());
+        if !matches!(stop.recv_timeout(wait), Err(RecvTimeoutError::Timeout)) {
+            break;
+        }
+    }
+}
+
+fn lock(h: &Mutex<History>) -> MutexGuard<'_, History> {
+    h.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Thread de collecte : ventilateur toutes les 500 ms, le reste toutes les secondes.
+pub struct Monitor {
+    history: Arc<Mutex<History>>,
+    stop_tx: Option<Sender<()>>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl Monitor {
+    pub fn start(sensors: Box<dyn Sensors>) -> Self {
+        let history = Arc::new(Mutex::new(History::new()));
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let h = history.clone();
+        let handle = std::thread::Builder::new()
+            .name("collector".into())
+            .spawn(move || run(sensors, h, stop_rx))
+            .expect("démarrage du thread de collecte");
+        Self { history, stop_tx: Some(stop_tx), handle: Some(handle) }
+    }
+
+    pub fn history(&self) -> Arc<Mutex<History>> {
+        self.history.clone()
+    }
+
+    pub fn stop(mut self) {
+        self.shutdown();
+    }
+
+    fn shutdown(&mut self) {
+        self.stop_tx.take(); // l'émetteur détruit réveille le thread
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+impl Drop for Monitor {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    fn slow(cpu: Option<f64>, throttle: Option<Throttle>) -> Readings {
+        Readings { cpu, throttle, ..Default::default() }
+    }
+
+    #[test]
+    fn slow_readings_are_stored_per_indicator() {
+        let mut h = History::new();
+        h.record_slow(100.0, &Readings { cpu: Some(12.0), temp: Some(40.0), ..Default::default() });
+        assert_eq!(h.snapshot(Key::Cpu).last, Some(12.0));
+        assert_eq!(h.snapshot(Key::Temp).last, Some(40.0));
+        assert_eq!(h.snapshot(Key::Ram).last, None);
+    }
+
+    #[test]
+    fn unavailable_reading_is_nan_in_series_not_zero() {
+        let mut h = History::new();
+        h.record_slow(100.0, &slow(Some(10.0), None));
+        h.record_slow(101.0, &slow(None, None));
+        let s = h.snapshot(Key::Cpu);
+        assert_eq!(s.last, None);
+        assert_eq!(s.values[0], 10.0);
+        assert!(s.values[1].is_nan());
+        assert_eq!(s.stats.unwrap().mean, 10.0);
+    }
+
+    #[test]
+    fn fan_activation_on_a_single_measure_stays_visible_in_its_bucket() {
+        let mut h = History::new();
+        let fan = |on| Some(FanReading { state: Some(on), pwm: Some(0), rpm: Some(0) });
+        for i in 0..20 {
+            h.record_fast(100.0 + i as f64 * 0.5, fan(i64::from(i == 7)));
+        }
+        let s = h.snapshot(Key::Fan);
+        assert_eq!(s.values.len(), 1);
+        assert!(s.values[0] > 0.0);
+        assert_eq!(h.fan_last().unwrap().state, Some(0));
+    }
+
+    #[test]
+    fn throttle_activity_is_bucketed_and_distinguishes_now_from_since_boot() {
+        let mut h = History::new();
+        let past_only = crate::sensors::parse_throttled(0x80000);
+        h.record_slow(100.0, &slow(None, Some(past_only.clone())));
+        assert_eq!(h.snapshot(Key::Throttle).values, vec![0.0]); // survenu avant : pas en cours
+        assert_eq!(h.throttle_last().unwrap().since_boot, ["limite temp"]);
+        h.record_slow(101.0, &slow(None, Some(crate::sensors::parse_throttled(0x4))));
+        assert!(h.snapshot(Key::Throttle).values[0] > 0.0);
+    }
+
+    #[test]
+    fn reset_clears_every_indicator() {
+        let mut h = History::new();
+        h.record_slow(100.0, &slow(Some(1.0), Some(crate::sensors::parse_throttled(0))));
+        h.record_fast(100.0, Some(FanReading { state: Some(1), pwm: None, rpm: None }));
+        h.reset();
+        for k in [Key::Cpu, Key::Fan, Key::Throttle] {
+            assert!(h.snapshot(k).values.is_empty());
+        }
+    }
+
+    struct Fake;
+    impl Sensors for Fake {
+        fn cpu_percent(&mut self) -> Option<f64> { Some(1.0) }
+        fn cpu_freq_mhz(&mut self) -> Option<f64> { Some(1500.0) }
+        fn ram_percent(&mut self) -> Option<f64> { Some(10.0) }
+        fn temperature_c(&mut self) -> Option<f64> { Some(40.0) }
+        fn power_w(&mut self) -> Option<f64> { Some(3.5) }
+        fn fan(&mut self) -> Option<FanReading> { None }
+    }
+
+    #[test]
+    fn monitor_records_in_background() {
+        let m = Monitor::start(Box::new(Fake));
+        std::thread::sleep(Duration::from_millis(700));
+        let h = m.history();
+        assert_eq!(h.lock().unwrap().snapshot(Key::Power).last, Some(3.5));
+        assert_eq!(h.lock().unwrap().snapshot(Key::Temp).last, Some(40.0));
+        m.stop();
+    }
+
+    struct Broken;
+    impl Sensors for Broken {
+        fn cpu_percent(&mut self) -> Option<f64> { panic!("capteur en panne") }
+        fn cpu_freq_mhz(&mut self) -> Option<f64> { None }
+        fn ram_percent(&mut self) -> Option<f64> { Some(10.0) }
+        fn temperature_c(&mut self) -> Option<f64> { Some(40.0) }
+        fn fan(&mut self) -> Option<FanReading> { panic!("capteur en panne") }
+    }
+
+    #[test]
+    fn monitor_survives_failing_and_panicking_sensors() {
+        let m = Monitor::start(Box::new(Broken));
+        std::thread::sleep(Duration::from_millis(1200));
+        let h = m.history();
+        assert_eq!(h.lock().unwrap().snapshot(Key::Temp).last, Some(40.0));
+        assert_eq!(h.lock().unwrap().snapshot(Key::Cpu).last, None);
+        assert!(h.lock().unwrap().snapshot(Key::Temp).values.len() >= 2); // la collecte continue
+        m.stop();
+    }
+
+    #[test]
+    fn stop_is_prompt_and_halts_collection() {
+        let m = Monitor::start(Box::new(Fake));
+        let h = m.history();
+        let t = Instant::now();
+        m.stop();
+        assert!(t.elapsed() < Duration::from_millis(400), "arrêt trop lent");
+        let n = h.lock().unwrap().snapshot(Key::Temp).values.len();
+        std::thread::sleep(Duration::from_millis(1100));
+        assert_eq!(h.lock().unwrap().snapshot(Key::Temp).values.len(), n);
+    }
+}
