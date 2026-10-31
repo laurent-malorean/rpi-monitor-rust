@@ -1,0 +1,7 @@
+#!/bin/sh
+# Rappel non bloquant (vocabulaire), puis tests bloquants.
+# Un hook n'hérite pas du PATH interactif : retrouver rustup (Homebrew) si présent.
+for d in /opt/homebrew/opt/rustup/bin "$HOME/.cargo/bin"; do [ -d "$d" ] && PATH="$d:$PATH"; done
+export PATH
+sh scripts/check_ontology.sh || true
+cargo test --quiet
