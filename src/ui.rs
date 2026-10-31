@@ -3,12 +3,13 @@
 use crate::app::{App, LaneView, Spec, SPECS};
 use crate::render::{auto_scale, big_digits, render_line, render_rows, resample};
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub const AXIS_W: usize = 6;
+const COMPACT_H: u16 = 5;
 
 /// Lignes du graphique d'un indicateur (axe + tracé), `w` x `h` cellules.
 pub fn chart_lines(spec: &Spec, values: &[f64], window_s: f64, w: usize, h: usize) -> Vec<Line<'static>> {
@@ -44,21 +45,39 @@ pub fn chart_lines(spec: &Spec, values: &[f64], window_s: f64, w: usize, h: usiz
         .collect()
 }
 
+pub const BAR_BG: Color = Color::Rgb(0, 0, 128); // barre d'en-tête / pied de page (comme Textual)
+pub const KEY_FG: Color = Color::Rgb(255, 170, 0);
+
+/// Répartit `total` lignes sur `n` zones égales ; le reste est cumulé vers le bas :
+/// les premières zones sont les plus courtes (même répartition que Textual).
+pub fn split_heights(total: u16, n: usize) -> Vec<u16> {
+    let edge = |i: usize| (i as u32 * u32::from(total) / n.max(1) as u32) as u16;
+    (0..n).map(|i| edge(i + 1) - edge(i)).collect()
+}
+
 pub fn draw(frame: &mut Frame, app: &App) {
-    let mut constraints = vec![Constraint::Length(1)];
-    constraints.extend(SPECS.iter().map(|s| if s.compact { Constraint::Length(5) } else { Constraint::Fill(1) }));
-    constraints.push(Constraint::Length(1));
-    let areas = Layout::vertical(constraints).split(frame.area());
+    let [header, body, footer_area] =
+        Layout::vertical([Constraint::Length(1), Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
+
+    // lignes à hauteur variable : répartition cumulée ; la ligne compacte garde 5 lignes
+    let compact = SPECS.iter().filter(|s| s.compact).count();
+    let flex_h = body.height.saturating_sub(COMPACT_H * compact as u16);
+    let mut flex = split_heights(flex_h, SPECS.len() - compact).into_iter();
+    let constraints: Vec<Constraint> = SPECS
+        .iter()
+        .map(|s| Constraint::Length(if s.compact { COMPACT_H } else { flex.next().unwrap_or(0) }))
+        .collect();
+    let lanes = Layout::vertical(constraints).split(body);
 
     let title = format!("RPi Monitor — {}", app.subtitle());
     frame.render_widget(
-        Paragraph::new(title).alignment(Alignment::Center).style(Style::new().add_modifier(Modifier::REVERSED)),
-        areas[0],
+        Paragraph::new(title).alignment(Alignment::Center).style(Style::new().fg(Color::White).bg(BAR_BG)),
+        header,
     );
-    for ((spec, view), area) in SPECS.iter().zip(app.views()).zip(&areas[1..=SPECS.len()]) {
+    for ((spec, view), area) in SPECS.iter().zip(app.views()).zip(lanes.iter()) {
         draw_lane(frame, spec, view, *area);
     }
-    frame.render_widget(footer(), areas[SPECS.len() + 1]);
+    frame.render_widget(footer(), footer_area);
 }
 
 fn draw_lane(frame: &mut Frame, spec: &Spec, view: &LaneView, area: Rect) {
@@ -75,13 +94,14 @@ fn draw_lane(frame: &mut Frame, spec: &Spec, view: &LaneView, area: Rect) {
 }
 
 fn footer() -> Paragraph<'static> {
-    let key = Style::new().add_modifier(Modifier::BOLD);
+    let key = Style::new().fg(KEY_FG).bg(BAR_BG).add_modifier(Modifier::BOLD);
+    let label = Style::new().fg(Color::White).bg(BAR_BG);
     let mut spans = vec![];
-    for (k, label) in [("q", "Quitter"), ("p", "Pause"), ("r", "Reset"), ("w", "Fenêtre")] {
-        spans.push(Span::styled(format!(" {k} "), key.add_modifier(Modifier::REVERSED)));
-        spans.push(Span::raw(format!(" {label} ")));
+    for (k, text) in [("q", "Quitter"), ("p", "Pause"), ("r", "Reset"), ("w", "Fenêtre")] {
+        spans.push(Span::styled(format!(" {k}"), key));
+        spans.push(Span::styled(format!(" {text} "), label));
     }
-    Paragraph::new(Line::from(spans))
+    Paragraph::new(Line::from(spans)).style(label)
 }
 
 #[cfg(test)]
@@ -114,6 +134,34 @@ mod tests {
         assert!(lines[0].trim_start().starts_with("100"));
         assert!(lines[3].trim_start().starts_with('0'));
         assert!(lines.iter().any(|l| l.chars().any(|c| ('\u{2801}'..='\u{28ff}').contains(&c))));
+    }
+
+    #[test]
+    fn heights_sum_to_total_and_differ_by_at_most_one() {
+        for (total, n) in [(35, 6), (40, 6), (12, 6), (5, 6), (0, 6), (7, 1)] {
+            let h = split_heights(total, n);
+            assert_eq!(h.len(), n);
+            assert_eq!(h.iter().sum::<u16>(), total);
+            assert!(h.iter().max().unwrap() - h.iter().min().unwrap() <= 1);
+        }
+    }
+
+    #[test]
+    fn short_lane_comes_first_like_textual() {
+        assert_eq!(split_heights(35, 6), vec![5, 6, 6, 6, 6, 6]);
+    }
+
+    #[test]
+    fn header_and_footer_use_the_blue_bar_style() {
+        let app = App::new(history(), false);
+        let mut term = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        term.draw(|f| draw(f, &app)).unwrap();
+        let buf = term.backend().buffer().clone();
+        assert_eq!(buf[(0, 0)].bg, BAR_BG);
+        assert_eq!(buf[(99, 0)].bg, BAR_BG);
+        assert_eq!(buf[(0, 39)].bg, BAR_BG);
+        let key = (0..100).map(|x| &buf[(x, 39)]).find(|c| c.symbol() == "q").unwrap();
+        assert_eq!(key.fg, KEY_FG);
     }
 
     #[test]
