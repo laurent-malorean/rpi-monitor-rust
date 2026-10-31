@@ -16,6 +16,8 @@ Le code produit par l'IA est donc contrôlé par ses tests et par ces règles, p
 
 ## Ce que fait l'application
 
+![Capture de rpi-monitor-rust sur un Raspberry Pi 5](docs/screen.png)
+
 Sept indicateurs empilés. Pour chacun : la valeur actuelle en gros à gauche (avec min / max / moyenne), et la courbe dans le temps à droite.
 
 1. **CPU (%)** : charge globale (`/proc/stat`).
