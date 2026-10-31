@@ -81,7 +81,7 @@ pub struct LinuxSensors {
     cooling: Option<PathBuf>,
     temp_hwmon: Option<PathBuf>,
     throttle_file: Option<PathBuf>,
-    prev_cpu: Option<(u64, u64)>, // (total, idle)
+    prev_cpu: Option<(u64, u64)>, // (total, idle) ; vide tant qu'aucune mesure n'a servi de départ
 }
 
 impl LinuxSensors {
@@ -102,7 +102,6 @@ impl LinuxSensors {
             prev_cpu: None,
         };
         s.detect();
-        s.prev_cpu = s.read_cpu_times(); // amorce : le 1er relevé ne vaut rien
         s
     }
 
@@ -141,7 +140,7 @@ impl Default for LinuxSensors {
 impl Sensors for LinuxSensors {
     fn cpu_percent(&mut self) -> Option<f64> {
         let cur = self.read_cpu_times()?;
-        let prev = self.prev_cpu.replace(cur)?;
+        let prev = self.prev_cpu.replace(cur)?; // 1re lecture : point de départ seulement
         let d_total = cur.0.checked_sub(prev.0)?;
         let d_idle = cur.1.saturating_sub(prev.1);
         (d_total > 0).then(|| (d_total - d_idle.min(d_total)) as f64 / d_total as f64 * 100.0)
@@ -257,10 +256,24 @@ mod tests {
         let d = tmpdir("cpu");
         write(&d.join("stat"), "cpu  100 0 100 800 0 0 0 0 0 0\n");
         let mut s = LinuxSensors::with_roots(&d, &d);
+        assert_eq!(s.cpu_percent(), None); // 1re lecture : point de départ seulement
         write(&d.join("stat"), "cpu  200 0 200 900 0 0 0 0 0 0\n");
         // +200 actif, +100 inactif -> 66,7 %
         let v = s.cpu_percent().unwrap();
         assert!((v - 200.0 / 300.0 * 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn first_cpu_measure_is_never_a_spike_from_startup() {
+        // Entre la création et la 1re mesure, quelques jiffies tous « actifs » (démarrage du
+        // programme) donneraient 100 % : la 1re lecture ne doit donc rien afficher.
+        let d = tmpdir("cpu-spike");
+        write(&d.join("stat"), "cpu  100 0 100 800 0 0 0 0 0 0\n");
+        let mut s = LinuxSensors::with_roots(&d, &d);
+        write(&d.join("stat"), "cpu  102 0 100 800 0 0 0 0 0 0\n");
+        assert_eq!(s.cpu_percent(), None);
+        write(&d.join("stat"), "cpu  102 0 100 900 0 0 0 0 0 0\n");
+        assert_eq!(s.cpu_percent(), Some(0.0));
     }
 
     #[test]

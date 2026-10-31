@@ -2,3 +2,5 @@
 /dist/
 .DS_Store
 Capture d’écran*.png
+/tmp/*
+!/tmp/.gitkeep
