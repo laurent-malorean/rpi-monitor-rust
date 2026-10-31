@@ -35,15 +35,15 @@ cargo run -- --demo     # données synthétiques (automatique hors Linux)
 ## 3. Compilation pour le Pi
 
 ```sh
-cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.36
+scripts/build-pi.sh
 ```
 
-Le suffixe `.2.36` fixe la version de glibc visée (Raspberry Pi OS Bookworm). Le binaire est dans `target/aarch64-unknown-linux-gnu/release/rpi-monitor`.
+Le script vise la glibc 2.36 (Raspberry Pi OS Bookworm), compile dans un cache hors du projet (`~/.cache/rpi-monitor-target`) et ne laisse que `dist/rpi-monitor`, le seul fichier à copier sur le Pi.
 
 ## 4. Déploiement
 
 ```sh
-scp target/aarch64-unknown-linux-gnu/release/rpi-monitor <utilisateur>@<pi>:~/
+scp dist/rpi-monitor <utilisateur>@<pi>:~/
 ssh <utilisateur>@<pi> ./rpi-monitor
 ```
 

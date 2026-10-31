@@ -57,8 +57,8 @@ cargo test              # tests
 Le développement se fait sur Mac (Apple Silicon) et le binaire est compilé pour le Pi depuis le Mac, avec `cargo-zigbuild`. La procédure complète est dans [docs/install.md](docs/install.md). En bref :
 
 ```sh
-scripts/build-pi.sh
-scp target/aarch64-unknown-linux-gnu/release/rpi-monitor <utilisateur>@<pi>:~/
+scripts/build-pi.sh        # produit dist/rpi-monitor
+scp dist/rpi-monitor <utilisateur>@<pi>:~/
 ```
 
 Le résultat est un binaire Linux ARM64 autonome d'environ 700 Ko (glibc 2.36, Raspberry Pi OS Bookworm). Ni Python ni `sudo` ne sont nécessaires sur le Pi.
