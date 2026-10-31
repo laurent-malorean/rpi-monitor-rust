@@ -1,0 +1,21 @@
+[package]
+name = "rpi-monitor"
+version = "0.1.0"
+edition = "2021"
+description = "Dashboard TUI de monitoring Raspberry Pi 5 (lecture seule, sans sudo)"
+
+[lib]
+name = "rpimon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rpi-monitor"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.30"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
