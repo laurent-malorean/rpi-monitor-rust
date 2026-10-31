@@ -3,11 +3,11 @@
 | Terme | Définition | Où dans le code |
 |---|---|---|
 | Indicateur | Grandeur surveillée affichée sur une ligne : valeur actuelle, min/max/moyenne, courbe. Les 7 actuels : CPU %, fréquence CPU, consommation, RAM %, température, ventilateur, throttling. | `src/app.rs` (`SPECS`) |
-| Historique | 30 minutes de mesures conservées par indicateur. | `src/monitor.rs` (`HISTORY_S`) |
+| Historique | 30 minutes de mesures conservées par indicateur. | `src/collector.rs` (`HISTORY_S`) |
 | Fenêtre d'affichage | Durée visible sur la courbe (1, 5 ou 30 min), indépendante de l'historique conservé. | `src/app.rs` (`WINDOWS`) |
-| Ventilateur actif | Le ventilateur est demandé ou tourne : état de refroidissement, PWM ou vitesse mesurée > 0. | `src/sensors/linux.rs` (`FanReading::active`) |
+| Ventilateur actif | Le ventilateur est demandé ou tourne : état de refroidissement, PWM ou vitesse mesurée > 0. | `src/sensors/mod.rs` (`FanReading::active`) |
 | Période de 10 s | Intervalle d'agrégation du ventilateur : une seule activation suffit à la marquer. | `src/history.rs` (`BucketSeries`) |
 | Mesure indisponible | Capteur absent ou illisible : affiché `--`, jamais compté comme 0. | `src/history.rs` (NaN) |
-| Throttling | Le firmware du Pi bride ou signale un problème : sous-tension, fréquence bridée, throttle, limite de température. « En cours » ≠ « survenu depuis le boot ». Un benchmark pendant un throttling n'est pas fiable. | `src/sensors/linux.rs` (`parse_throttled`, `Throttle`) |
+| Throttling | Le firmware du Pi bride ou signale un problème : sous-tension, fréquence bridée, throttle, limite de température. « En cours » ≠ « survenu depuis le boot ». Un benchmark pendant un throttling n'est pas fiable. | `src/sensors/mod.rs` (`parse_throttled`, `Throttle`) |
 | Consommation | Puissance électrique estimée du Pi (W) : somme tension × courant des rails du PMIC. Estimation, hors entrée 5 V et pertes. | `src/sensors/linux.rs` (`parse_pmic_power`) |
 | Mode démo | Exécution avec des données synthétiques plutôt que de vrais capteurs (développement hors Pi, ex. sur Mac). Automatique hors Linux. | `src/sensors/demo.rs` (`DemoSensors`), `src/main.rs` |
