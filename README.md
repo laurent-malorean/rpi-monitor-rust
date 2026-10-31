@@ -37,4 +37,6 @@ Voir [docs/install.md](docs/install.md). En bref : `scripts/build-pi.sh`, puis `
 
 Ajouter une métrique : une méthode de `Sensors`, une série dans `History`, un `Spec` dans `app.rs`.
 
+Schéma : [docs/architecture.svg](docs/architecture.svg).
+
 Voir `CLAUDE.md` (méthode TDD, conventions) et `docs/` (ontologie, bonnes pratiques).
