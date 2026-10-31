@@ -15,3 +15,4 @@
 - **Démo** : le mode démo implémente le même trait `Sensors` que les capteurs réels ; générateur pseudo-aléatoire maison (xorshift) pour éviter la dépendance `rand`.
 - **Collecte / planification** : échéances calculées depuis un `Instant` de départ (`start + 500 ms × tick`), pas par addition de pauses, pour éviter la dérive ; l'attente est un `recv_timeout` sur un canal d'arrêt, donc l'arrêt est immédiat (pas de `sleep` à interrompre).
 - **Collecte / panic** : le message d'un panic rattrapé dans le thread de collecte s'écrirait sur stderr en plein écran TUI ; `main` doit installer un hook de panic silencieux pendant que le terminal est en mode alterné.
+- **CPU / `/proc/stat`** : la 1re lecture ne sert que de point de départ (indisponible). Un delta pris quelques ms après le démarrage ne porte que sur 1-2 jiffies de 10 ms, tous « actifs » : il donnait un faux pic à 100 % (constaté sur le Pi).
