@@ -48,6 +48,7 @@ pub struct LaneView {
     pub big: String,
     pub stats: String,
     pub values: Vec<f64>,
+    pub cores: Vec<Vec<f64>>, // CPU seulement : une série par cœur (vide sinon ou si indisponible)
     pub window_s: f64,
 }
 
@@ -98,7 +99,8 @@ pub fn lane_view(spec: &Spec, history: &History, window_s: f64) -> LaneView {
             (fmt(snap.last, d), stats)
         }
     };
-    LaneView { big, stats, values: snap.values, window_s }
+    let cores = if spec.key == Key::Cpu { history.cores_snapshot() } else { vec![] };
+    LaneView { big, stats, values: snap.values, cores, window_s }
 }
 
 pub struct App {
@@ -309,5 +311,16 @@ mod tests {
         assert_eq!((now.big.as_str(), now.stats.as_str()), ("2", "sous-tension+throttle"));
         let unknown = lane_view(&SPECS[6], &History::new(), 300.0);
         assert_eq!((unknown.big.as_str(), unknown.stats.as_str()), ("--", "N/A"));
+    }
+
+    #[test]
+    fn cpu_lane_carries_the_per_core_series_and_other_lanes_do_not() {
+        let h = Arc::new(Mutex::new(History::new()));
+        h.lock().unwrap().record_slow(1.0, &Readings { cpu: Some(50.0), ram: Some(20.0), cores: vec![Some(10.0), Some(90.0)], ..Default::default() });
+        let g = h.lock().unwrap();
+        let cpu = lane_view(&SPECS[0], &g, 60.0);
+        assert_eq!(cpu.cores, vec![vec![10.0], vec![90.0]]);
+        assert_eq!(cpu.big, "50", "le gros chiffre reste la moyenne");
+        assert!(lane_view(&SPECS[3], &g, 60.0).cores.is_empty());
     }
 }

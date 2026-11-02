@@ -73,6 +73,7 @@ pub struct Readings {
 /// Historiques de tous les indicateurs (30 min) + dernières lectures détaillées.
 pub struct History {
     rings: [RingBuffer; 5], // cpu, freq, power, ram, temp
+    core_rings: Vec<RingBuffer>, // 30 min par cœur de CPU (TUI)
     fan: BucketSeries,
     throttle: BucketSeries,
     fan_last: Option<FanReading>,
@@ -97,6 +98,7 @@ impl History {
     pub fn new() -> Self {
         Self {
             rings: std::array::from_fn(|_| RingBuffer::new(HISTORY_S)),
+            core_rings: vec![],
             fan: BucketSeries::new(BUCKET_S, HISTORY_S / BUCKET_S as usize),
             throttle: BucketSeries::new(BUCKET_S, HISTORY_S / BUCKET_S as usize),
             fan_last: None,
@@ -122,6 +124,10 @@ impl History {
             self.archive[key.index()].add(ts, v);
         }
         for (i, v) in r.cores.iter().take(MAX_CORES).enumerate() {
+            if self.core_rings.len() <= i {
+                self.core_rings.push(RingBuffer::new(HISTORY_S));
+            }
+            self.core_rings[i].add(*v);
             if self.cores.len() <= i {
                 self.cores.push(Series::new(ARCHIVE_STEP_S, ARCHIVE_S));
             }
@@ -199,8 +205,14 @@ impl History {
         self.throttle_last.clone()
     }
 
+    /// Valeurs des 30 dernières minutes de chaque cœur (NaN = indisponible), pour la TUI.
+    pub fn cores_snapshot(&self) -> Vec<Vec<f64>> {
+        self.core_rings.iter().map(RingBuffer::values).collect()
+    }
+
     pub fn reset(&mut self) {
         self.rings.iter_mut().for_each(RingBuffer::clear);
+        self.core_rings.iter_mut().for_each(RingBuffer::clear);
         self.fan.clear();
         self.throttle.clear();
     }
@@ -513,5 +525,26 @@ mod tests {
         std::thread::sleep(Duration::from_millis(700));
         assert_eq!(m.history().lock().unwrap().archive_cores(None).len(), 4);
         m.stop();
+    }
+
+    #[test]
+    fn core_ring_buffers_keep_values_for_the_tui_with_nan_for_missing() {
+        let mut h = History::new();
+        h.record_slow(1.0, &Readings { cores: vec![Some(1.0), None], ..Default::default() });
+        let c = h.cores_snapshot();
+        assert_eq!(c.len(), 2);
+        assert_eq!(c[0], vec![1.0]);
+        assert!(c[1][0].is_nan(), "un cœur sans mesure : NaN (indisponible), jamais 0");
+    }
+
+    #[test]
+    fn core_ring_buffers_are_bounded_and_cleared_by_reset() {
+        let mut h = History::new();
+        for t in 0..(HISTORY_S + 10) {
+            h.record_slow(t as f64, &Readings { cores: vec![Some(5.0)], ..Default::default() });
+        }
+        assert_eq!(h.cores_snapshot()[0].len(), HISTORY_S);
+        h.reset();
+        assert!(h.cores_snapshot().iter().all(Vec::is_empty));
     }
 }

@@ -92,6 +92,32 @@ pub fn render_line(values: &[f64], width: usize, height: usize, lo: f64, hi: f64
         .collect()
 }
 
+/// Superpose des couches braille de même taille : les points d'une cellule sont réunis, et la
+/// cellule revient à la couche qui y a le plus de points (à égalité, la dernière). `None` : cellule vide.
+pub fn merge_braille(layers: &[Vec<String>]) -> Vec<Vec<(char, Option<usize>)>> {
+    let grids: Vec<Vec<Vec<char>>> = layers.iter().map(|l| l.iter().map(|r| r.chars().collect()).collect()).collect();
+    let rows = grids.iter().map(Vec::len).max().unwrap_or(0);
+    (0..rows)
+        .map(|r| {
+            let cols = grids.iter().filter_map(|g| g.get(r)).map(Vec::len).max().unwrap_or(0);
+            (0..cols)
+                .map(|c| {
+                    let (mut bits, mut owner, mut best) = (0u32, None, 0);
+                    for (i, g) in grids.iter().enumerate() {
+                        let b = g.get(r).and_then(|row| row.get(c)).map_or(0, |ch| (*ch as u32).saturating_sub(0x2800) & 0xFF);
+                        bits |= b;
+                        if b.count_ones() > 0 && b.count_ones() >= best {
+                            best = b.count_ones();
+                            owner = Some(i);
+                        }
+                    }
+                    (if bits == 0 { ' ' } else { char::from_u32(0x2800 + bits).unwrap_or(' ') }, owner)
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// Glyphes 3 lignes (chiffres, point, tiret) pour les gros nombres.
 fn glyph(c: char) -> [&'static str; 3] {
     match c {
@@ -210,5 +236,31 @@ mod tests {
         assert_ne!(big_digits("0"), big_digits("8"));
         let dash = big_digits("--");
         assert!(dash.iter().any(|r| r.contains('━')));
+    }
+
+    #[test]
+    fn merge_braille_combines_dots_and_credits_the_layer_with_most_dots() {
+        let a = vec!["\u{2801}\u{2801}".to_string()];
+        let b = vec!["\u{2802}\u{2807}".to_string()];
+        let m = merge_braille(&[a, b]);
+        assert_eq!(m[0][0], ('\u{2803}', Some(1)), "points réunis dans la cellule, 1 point chacun : le dernier l'emporte");
+        assert_eq!(m[0][1], ('\u{2807}', Some(1)), "la couche aux plus de points l'emporte");
+    }
+
+    #[test]
+    fn merge_braille_keeps_blank_cells_blank_and_cells_of_a_single_layer() {
+        let a = vec!["\u{2800}\u{2840}".to_string()];
+        let b = vec!["\u{2800}\u{2800}".to_string()];
+        let m = merge_braille(&[a, b]);
+        assert_eq!(m[0][0], (' ', None));
+        assert_eq!(m[0][1], ('\u{2840}', Some(0)));
+    }
+
+    #[test]
+    fn merge_braille_tolerates_no_layer_or_ragged_layers() {
+        assert!(merge_braille(&[]).is_empty());
+        let m = merge_braille(&[vec!["\u{2801}".to_string()], vec!["\u{2801}\u{2801}".to_string(), "\u{2801}".to_string()]]);
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0].len(), 2);
     }
 }

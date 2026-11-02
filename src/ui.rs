@@ -1,7 +1,8 @@
 //! Dessin ratatui : en-tête, sept lignes empilées (valeurs à gauche, courbe à droite), pied de page.
 
 use crate::app::{App, LaneView, Spec, SPECS};
-use crate::render::{auto_scale, big_digits, render_line, render_rows, resample};
+use crate::collector::Key;
+use crate::render::{auto_scale, big_digits, merge_braille, render_line, render_rows, resample};
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -45,6 +46,58 @@ pub fn chart_lines(spec: &Spec, values: &[f64], window_s: f64, w: usize, h: usiz
         .collect()
 }
 
+/// Couleurs des cœurs du CPU (les mêmes que l'interface Web, thème sombre).
+pub const CORE_COLORS: [Color; 8] = [
+    Color::Rgb(96, 165, 250),
+    Color::Rgb(248, 113, 113),
+    Color::Rgb(52, 211, 153),
+    Color::Rgb(251, 191, 36),
+    Color::Rgb(167, 139, 250),
+    Color::Rgb(34, 211, 238),
+    Color::Rgb(244, 114, 182),
+    Color::Rgb(163, 230, 53),
+];
+
+/// Courbes superposées, une par cœur et une couleur chacune ; même axe que la courbe unique.
+pub fn chart_lines_cores(spec: &Spec, cores: &[Vec<f64>], window_s: f64, w: usize, h: usize) -> Vec<Line<'static>> {
+    if w <= AXIS_W + 2 || h < 2 {
+        return vec![];
+    }
+    let n_points = ((window_s / spec.step_s) as usize).max(1);
+    let pw = w - AXIS_W;
+    let (lo, hi) = spec.fixed.unwrap_or((0.0, 100.0));
+    let layers: Vec<Vec<String>> = cores.iter().map(|c| render_line(&resample(c, n_points, pw * 2, false), pw, h, lo, hi)).collect();
+    let label = |v: f64| format!("{v:.0}");
+    merge_braille(&layers)
+        .into_iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let axis = match i {
+                0 => label(hi),
+                i if i == h - 1 => label(lo),
+                _ => String::new(),
+            };
+            let mut spans = vec![Span::styled(format!("{axis:>w$} ", w = AXIS_W - 1), Style::new().add_modifier(Modifier::DIM))];
+            let mut run: Option<(Option<usize>, String)> = None;
+            for (ch, owner) in row {
+                match &mut run {
+                    Some((o, text)) if *o == owner => text.push(ch),
+                    _ => {
+                        spans.extend(run.take().map(|(o, t)| core_span(o, t)));
+                        run = Some((owner, ch.to_string()));
+                    }
+                }
+            }
+            spans.extend(run.map(|(o, t)| core_span(o, t)));
+            Line::from(spans)
+        })
+        .collect()
+}
+
+fn core_span(owner: Option<usize>, text: String) -> Span<'static> {
+    owner.map_or_else(|| Span::raw(text.clone()), |i| Span::styled(text.clone(), Style::new().fg(CORE_COLORS[i % CORE_COLORS.len()])))
+}
+
 pub const BAR_BG: Color = Color::Rgb(0, 0, 128); // barre d'en-tête / pied de page (comme Textual)
 pub const KEY_FG: Color = Color::Rgb(255, 170, 0);
 
@@ -83,13 +136,27 @@ pub fn draw(frame: &mut Frame, app: &App) {
 fn draw_lane(frame: &mut Frame, spec: &Spec, view: &LaneView, area: Rect) {
     let [left, chart] = Layout::horizontal([Constraint::Length(30), Constraint::Fill(1)]).areas(area);
     let dim = Style::new().add_modifier(Modifier::DIM);
-    let mut lines = vec![Line::styled(format!("{} ({})", spec.title, spec.unit), Style::new().add_modifier(Modifier::BOLD))];
+    let per_core = spec.key == Key::Cpu && !view.cores.is_empty();
+    let mut title = vec![Span::styled(format!("{} ({})", spec.title, spec.unit), Style::new().add_modifier(Modifier::BOLD))];
+    if per_core {
+        title.push(Span::raw("  "));
+        for i in 0..view.cores.len() {
+            title.push(Span::styled("●", Style::new().fg(CORE_COLORS[i % CORE_COLORS.len()])));
+            title.push(Span::styled(format!("{} ", i + 1), dim));
+        }
+    }
+    let mut lines = vec![Line::from(title)];
     if !spec.compact {
         lines.extend(big_digits(&view.big).map(Line::from));
     }
     lines.push(Line::styled(view.stats.clone(), dim));
     frame.render_widget(Paragraph::new(lines), left.inner(Margin::new(1, 0)));
-    let chart_lines = chart_lines(spec, &view.values, view.window_s, chart.width as usize, chart.height as usize);
+    let (w, h) = (chart.width as usize, chart.height as usize);
+    let chart_lines = if per_core {
+        chart_lines_cores(spec, &view.cores, view.window_s, w, h)
+    } else {
+        chart_lines(spec, &view.values, view.window_s, w, h)
+    };
     frame.render_widget(Paragraph::new(chart_lines), chart);
 }
 
@@ -240,5 +307,46 @@ mod tests {
         let app = App::new(history(), false);
         let s = screen(&app, 100, 36).join("\n");
         assert!(s.contains("Quitter") && s.contains("Throttling"));
+    }
+
+    #[test]
+    fn cores_chart_draws_one_color_per_core() {
+        let cores = vec![vec![10.0; 60], vec![30.0; 60], vec![60.0; 60], vec![90.0; 60]];
+        let lines = chart_lines_cores(&SPECS[0], &cores, 60.0, 40, 8);
+        assert_eq!(lines.len(), 8);
+        let used: std::collections::HashSet<_> =
+            lines.iter().flat_map(|l| l.spans.iter()).filter(|s| s.content.chars().any(|c| ('\u{2801}'..='\u{28ff}').contains(&c))).filter_map(|s| s.style.fg).collect();
+        for c in &CORE_COLORS[..4] {
+            assert!(used.contains(c), "couleur {c:?} absente du tracé");
+        }
+    }
+
+    #[test]
+    fn cores_chart_keeps_the_axis_of_the_single_curve() {
+        let lines = text(&chart_lines_cores(&SPECS[0], &[vec![10.0; 60], vec![50.0; 60]], 60.0, 30, 4));
+        assert!(lines[0].trim_start().starts_with("100"));
+        assert!(lines[3].trim_start().starts_with('0'));
+        assert!(lines.iter().all(|l| l.chars().count() == 30));
+    }
+
+    #[test]
+    fn a_core_without_any_measure_draws_nothing() {
+        let lines = chart_lines_cores(&SPECS[0], &[vec![f64::NAN; 60], vec![40.0; 60]], 60.0, 30, 4);
+        let used: Vec<_> = lines.iter().flat_map(|l| l.spans.iter()).filter(|s| s.content.chars().any(|c| ('\u{2801}'..='\u{28ff}').contains(&c))).filter_map(|s| s.style.fg).collect();
+        assert!(!used.is_empty() && used.iter().all(|c| *c == CORE_COLORS[1]));
+    }
+
+    #[test]
+    fn cpu_title_shows_a_colored_legend_when_cores_are_known() {
+        let h = history();
+        for t in 0..30 {
+            h.lock().unwrap().record_slow(200.0 + t as f64, &Readings { cpu: Some(40.0), cores: vec![Some(10.0), Some(30.0), Some(60.0), Some(90.0)], ..Default::default() });
+        }
+        let app = App::new(h, false);
+        let mut term = Terminal::new(TestBackend::new(110, 42)).unwrap();
+        term.draw(|f| draw(f, &app)).unwrap();
+        let buf = term.backend().buffer().clone();
+        let legend: std::collections::HashSet<_> = (0..30).map(|x| &buf[(x, 1)]).filter(|c| c.symbol() == "●").map(|c| c.fg).collect();
+        assert_eq!(legend.len(), 4, "une pastille de couleur par cœur dans le titre du CPU");
     }
 }

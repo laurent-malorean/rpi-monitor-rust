@@ -40,7 +40,7 @@ Une mesure absente est affichée `--` (ou « indisponible » sur le Web) et n'es
 
 ![Capture de rpi-monitor-rust sur un Raspberry Pi 5](docs/screen.png)
 
-Sept indicateurs empilés : la valeur actuelle en gros à gauche (avec min / max / moyenne), la courbe dans le temps à droite. Elle fonctionne par SSH et reste inchangée.
+Sept indicateurs empilés : la valeur actuelle en gros à gauche (avec min / max / moyenne), la courbe dans le temps à droite. Pour le CPU, le chiffre est la moyenne et la courbe affiche **un cœur par couleur** (pastilles de légende dans le titre). Elle fonctionne par SSH.
 
 | Touche | Action |
 |---|---|
