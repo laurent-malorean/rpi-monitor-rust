@@ -182,6 +182,7 @@ mod tests {
                     ram: Some(33.0),
                     temp: Some(50.0),
                     throttle: Some(parse_throttled(0)),
+                    ..Default::default()
                 };
                 g.record_slow(100.0 + i as f64, &r);
                 g.record_fast(100.0 + i as f64, Some(FanReading { state: Some(1), pwm: Some(75), rpm: Some(1700) }));

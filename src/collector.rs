@@ -16,6 +16,7 @@ const FAST: Duration = Duration::from_millis(500); // ventilateur
 const SLOW_EVERY: u32 = 2; // autres métriques : 1 s
 pub const ARCHIVE_S: f64 = 48.0 * 3600.0; // historique long
 const ARCHIVE_STEP_S: f64 = 10.0;
+pub const MAX_CORES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
@@ -66,6 +67,7 @@ pub struct Readings {
     pub ram: Option<f64>,
     pub temp: Option<f64>,
     pub throttle: Option<Throttle>,
+    pub cores: Vec<Option<f64>>, // charge de chaque cœur ; vide = indisponible
 }
 
 /// Historiques de tous les indicateurs (30 min) + dernières lectures détaillées.
@@ -76,6 +78,7 @@ pub struct History {
     fan_last: Option<FanReading>,
     throttle_last: Option<Throttle>,
     archive: [Series; 7], // 48 h horodatées, indexées comme `Key::ALL`
+    cores: Vec<Series>,   // 48 h par cœur de CPU, créées au fur et à mesure
 }
 
 fn ring_index(key: Key) -> Option<usize> {
@@ -98,6 +101,7 @@ impl History {
             fan_last: None,
             throttle_last: None,
             archive: std::array::from_fn(|_| Series::new(ARCHIVE_STEP_S, ARCHIVE_S)),
+            cores: vec![],
         }
     }
 
@@ -114,6 +118,12 @@ impl History {
         }
         for (key, v) in [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp].into_iter().zip([r.cpu, r.freq, r.power, r.ram, r.temp]) {
             self.archive[key.index()].add(ts, v);
+        }
+        for (i, v) in r.cores.iter().take(MAX_CORES).enumerate() {
+            if self.cores.len() <= i {
+                self.cores.push(Series::new(ARCHIVE_STEP_S, ARCHIVE_S));
+            }
+            self.cores[i].add(ts, *v);
         }
         let throttling = r.throttle.as_ref().map(Throttle::active);
         self.throttle.add(ts, throttling);
@@ -146,6 +156,27 @@ impl History {
         for (key, points) in data {
             self.archive[key.index()].restore(points);
         }
+    }
+
+    /// Historique long de chaque cœur de CPU (une série par cœur, dans l'ordre).
+    pub fn archive_cores(&self, since: Option<f64>) -> Vec<Vec<Point>> {
+        self.cores.iter().map(|c| c.points(since)).collect()
+    }
+
+    pub fn cores_export(&self) -> Vec<Vec<Point>> {
+        self.cores.iter().map(Series::completed).collect()
+    }
+
+    pub fn cores_import(&mut self, data: Vec<Vec<Point>>) {
+        self.cores = data
+            .into_iter()
+            .take(MAX_CORES)
+            .map(|points| {
+                let mut s = Series::new(ARCHIVE_STEP_S, ARCHIVE_S);
+                s.restore(points);
+                s
+            })
+            .collect();
     }
 
     pub fn archive_stats(&self, key: Key, since: Option<f64>) -> Option<Stats> {
@@ -201,6 +232,7 @@ fn run(mut sensors: Box<dyn Sensors>, history: Arc<Mutex<History>>, stop: Receiv
                 ram: safe(|| sensors.ram_percent()),
                 temp: safe(|| sensors.temperature_c()),
                 throttle: safe(|| sensors.throttled()).map(parse_throttled),
+                cores: catch_unwind(AssertUnwindSafe(|| sensors.cpu_cores_percent())).unwrap_or_default(),
             };
             lock(&history).record_slow(ts, &r);
         }
@@ -413,5 +445,65 @@ mod tests {
         let n = h.lock().unwrap().snapshot(Key::Temp).values.len();
         std::thread::sleep(Duration::from_millis(1100));
         assert_eq!(h.lock().unwrap().snapshot(Key::Temp).values.len(), n);
+    }
+
+    #[test]
+    fn per_core_load_is_archived_one_series_per_core() {
+        let mut h = History::new();
+        h.record_slow(100.0, &Readings { cores: vec![Some(10.0), Some(90.0), None, Some(40.0)], ..Default::default() });
+        h.record_slow(101.0, &Readings { cores: vec![Some(20.0), Some(80.0), None, Some(60.0)], ..Default::default() });
+        let cores = h.archive_cores(None);
+        assert_eq!(cores.len(), 4);
+        assert_eq!(cores[0][0].mean, 15.0);
+        assert_eq!(cores[1][0].max, 90.0);
+        assert!(cores[2].is_empty(), "un cœur sans mesure n'a pas de point, jamais 0");
+        assert_eq!(cores[3][0].ts, 100.0);
+    }
+
+    #[test]
+    fn readings_without_cores_leave_the_core_archive_empty() {
+        let mut h = History::new();
+        h.record_slow(100.0, &Readings { cpu: Some(5.0), ..Default::default() });
+        assert!(h.archive_cores(None).is_empty());
+    }
+
+    #[test]
+    fn core_archive_is_bounded_and_not_touched_by_reset() {
+        let mut h = History::new();
+        h.record_slow(100.0, &Readings { cores: vec![Some(1.0); 500], ..Default::default() });
+        assert_eq!(h.archive_cores(None).len(), MAX_CORES);
+        h.reset();
+        assert_eq!(h.archive_cores(None).len(), MAX_CORES);
+    }
+
+    #[test]
+    fn core_archive_exports_and_imports_completed_periods() {
+        let mut h = History::new();
+        h.record_slow(100.0, &Readings { cores: vec![Some(10.0), Some(20.0)], ..Default::default() });
+        h.record_slow(110.0, &Readings { cores: vec![Some(30.0), Some(40.0)], ..Default::default() });
+        let exported = h.cores_export();
+        assert_eq!(exported.len(), 2);
+        assert_eq!(exported[0].len(), 1); // la période en cours n'est pas figée
+        let mut fresh = History::new();
+        fresh.cores_import(exported);
+        assert_eq!(fresh.archive_cores(None)[1][0].mean, 20.0);
+    }
+
+    struct FourCores;
+    impl Sensors for FourCores {
+        fn cpu_percent(&mut self) -> Option<f64> { Some(50.0) }
+        fn cpu_freq_mhz(&mut self) -> Option<f64> { None }
+        fn ram_percent(&mut self) -> Option<f64> { None }
+        fn temperature_c(&mut self) -> Option<f64> { None }
+        fn cpu_cores_percent(&mut self) -> Vec<Option<f64>> { vec![Some(10.0), Some(20.0), Some(30.0), Some(40.0)] }
+        fn fan(&mut self) -> Option<FanReading> { None }
+    }
+
+    #[test]
+    fn monitor_collects_cores_and_survives_a_panicking_core_reader() {
+        let m = Monitor::start(Box::new(FourCores));
+        std::thread::sleep(Duration::from_millis(700));
+        assert_eq!(m.history().lock().unwrap().archive_cores(None).len(), 4);
+        m.stop();
     }
 }
