@@ -226,7 +226,12 @@ pub struct Monitor {
 
 impl Monitor {
     pub fn start(sensors: Box<dyn Sensors>) -> Self {
-        let history = Arc::new(Mutex::new(History::new()));
+        Self::start_with(sensors, History::new())
+    }
+
+    /// Démarre la collecte sur un historique existant (ex. restauré d'une sauvegarde).
+    pub fn start_with(sensors: Box<dyn Sensors>, history: History) -> Self {
+        let history = Arc::new(Mutex::new(history));
         let (stop_tx, stop_rx) = mpsc::channel();
         let h = history.clone();
         let handle = std::thread::Builder::new()

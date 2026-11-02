@@ -3,9 +3,11 @@
 //! Lancement : `rpi-monitor [--demo]` (démo automatique hors Linux).
 
 use rpimon::app::App;
-use rpimon::cli::{self, Command, USAGE};
+use rpimon::cli::{self, Command, ServeOptions, USAGE};
 use rpimon::collector::Monitor;
 use rpimon::sensors::{demo::DemoSensors, linux::LinuxSensors, Sensors};
+use rpimon::server::config;
+use rpimon::service::Service;
 use rpimon::ui;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::DefaultTerminal;
@@ -21,10 +23,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(Command::Run { demo }) => run(demo),
-        Ok(Command::Serve(_)) => {
-            eprintln!("serve : pas encore disponible");
-            ExitCode::FAILURE
-        }
+        Ok(Command::Serve(opts)) => serve(opts),
         Err(e) => {
             eprintln!("{e}\n\n{USAGE}");
             ExitCode::from(2)
@@ -32,13 +31,50 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(demo: bool) -> ExitCode {
-    let sensors: Box<dyn Sensors> = if demo {
+fn make_sensors(demo: bool) -> Box<dyn Sensors> {
+    if demo {
         let seed = SystemTime::now().duration_since(UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
         Box::new(DemoSensors::new(seed))
     } else {
         Box::new(LinuxSensors::new())
+    }
+}
+
+/// Service permanent : tourne jusqu'à SIGINT/SIGTERM, journalise sur stderr (journald).
+fn serve(opts: ServeOptions) -> ExitCode {
+    let config = match config::resolve(opts, &|k| std::env::var(k).ok()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("configuration : {e}");
+            return ExitCode::from(2);
+        }
     };
+    let (tx, rx) = std::sync::mpsc::channel();
+    if let Err(e) = ctrlc::set_handler(move || {
+        let _ = tx.send(());
+    }) {
+        eprintln!("gestion des signaux impossible : {e}");
+        return ExitCode::FAILURE;
+    }
+    let service = match Service::start(&config, make_sensors(config.demo)) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("démarrage impossible : {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("rpi-monitor : à l'écoute sur http://{}{}", service.addr(), if config.demo { " (mode démo)" } else { "" });
+    if config.no_auth {
+        eprintln!("rpi-monitor : ATTENTION, authentification désactivée (--no-auth)");
+    }
+    let _ = rx.recv();
+    eprintln!("rpi-monitor : arrêt en cours");
+    service.stop();
+    ExitCode::SUCCESS
+}
+
+fn run(demo: bool) -> ExitCode {
+    let sensors = make_sensors(demo);
     let monitor = Monitor::start(sensors);
     let mut app = App::new(monitor.history(), demo);
 
