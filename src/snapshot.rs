@@ -11,18 +11,34 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const FILE: &str = "history.json";
-const VERSION: u64 = 1;
+const VERSION: u64 = 2; // 2 : ajout de la charge par cœur
 
 type Data = Vec<(Key, Vec<Point>)>;
+type Cores = Vec<Vec<Point>>;
 
-fn write(data: &Data, dir: &Path) -> Result<(), String> {
+fn rows(points: &[Point]) -> Value {
+    Value::Array(points.iter().map(|p| json!([p.ts, round2(p.mean), round2(p.min), round2(p.max)])).collect())
+}
+
+fn points(rows: &Value) -> Option<Vec<Point>> {
+    rows.as_array()?
+        .iter()
+        .map(|r| {
+            let r = r.as_array()?;
+            let n = |i: usize| r.get(i).and_then(Value::as_f64);
+            Some(Point { ts: n(0)?, mean: n(1)?, min: n(2)?, max: n(3)? })
+        })
+        .collect()
+}
+
+fn write(data: &Data, cores: &Cores, dir: &Path) -> Result<(), String> {
     let mut series = serde_json::Map::new();
-    for (key, points) in data {
-        let rows: Vec<Value> = points.iter().map(|p| json!([p.ts, round2(p.mean), round2(p.min), round2(p.max)])).collect();
-        series.insert(key.id().into(), Value::Array(rows));
+    for (key, pts) in data {
+        series.insert(key.id().into(), rows(pts));
     }
+    let cpu_cores: Vec<Value> = cores.iter().map(|c| rows(c)).collect();
     let saved_at = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
-    let text = json!({ "version": VERSION, "saved_at": saved_at, "series": series }).to_string();
+    let text = json!({ "version": VERSION, "saved_at": saved_at, "series": series, "cpu_cores": cpu_cores }).to_string();
     let (tmp, dest) = (dir.join(format!("{FILE}.tmp")), dir.join(FILE));
     let io = |e: std::io::Error| format!("sauvegarde impossible dans {} : {e}", dir.display());
     std::fs::write(&tmp, text).map_err(io)?;
@@ -31,10 +47,10 @@ fn write(data: &Data, dir: &Path) -> Result<(), String> {
 
 /// Écrit l'historique long dans `dir/history.json`.
 pub fn save(history: &History, dir: &Path) -> Result<(), String> {
-    write(&history.archive_export(), dir)
+    write(&history.archive_export(), &history.cores_export(), dir)
 }
 
-fn parse(text: &str) -> Option<Data> {
+fn parse(text: &str) -> Option<(Data, Cores)> {
     let v: Value = serde_json::from_str(text).ok()?;
     if v["version"].as_u64()? != VERSION {
         return None;
@@ -42,16 +58,12 @@ fn parse(text: &str) -> Option<Data> {
     let series = v["series"].as_object()?;
     let mut out = vec![];
     for key in Key::ALL {
-        let Some(rows) = series.get(key.id()) else { continue };
-        let mut points = vec![];
-        for r in rows.as_array()? {
-            let r = r.as_array()?;
-            let n = |i: usize| r.get(i).and_then(Value::as_f64);
-            points.push(Point { ts: n(0)?, mean: n(1)?, min: n(2)?, max: n(3)? });
+        if let Some(r) = series.get(key.id()) {
+            out.push((key, points(r)?));
         }
-        out.push((key, points));
     }
-    Some(out)
+    let cores = v["cpu_cores"].as_array()?.iter().map(points).collect::<Option<Cores>>()?;
+    Some((out, cores))
 }
 
 /// Recharge la sauvegarde. `Ok(false)` : pas de fichier (premier démarrage).
@@ -63,8 +75,9 @@ pub fn load(history: &mut History, dir: &Path) -> Result<bool, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(format!("lecture de {} impossible : {e}", path.display())),
     };
-    let data = parse(&text).ok_or_else(|| format!("{} illisible ou d'une version inconnue : ignoré", path.display()))?;
+    let (data, cores) = parse(&text).ok_or_else(|| format!("{} illisible ou d'une version inconnue : ignoré", path.display()))?;
     history.archive_import(data);
+    history.cores_import(cores);
     Ok(true)
 }
 
@@ -82,8 +95,11 @@ impl Saver {
             .name("snapshot".into())
             .spawn(move || loop {
                 let stopping = !matches!(stop_rx.recv_timeout(every), Err(RecvTimeoutError::Timeout));
-                let data = history.lock().unwrap_or_else(|e| e.into_inner()).archive_export();
-                if let Err(e) = write(&data, &dir) {
+                let (data, cores) = {
+                    let h = history.lock().unwrap_or_else(|e| e.into_inner());
+                    (h.archive_export(), h.cores_export())
+                };
+                if let Err(e) = write(&data, &cores, &dir) {
                     eprintln!("{e}");
                 }
                 if stopping {
@@ -129,7 +145,7 @@ mod tests {
     fn history_with_data() -> History {
         let mut h = History::new();
         for t in 0..35 {
-            h.record_slow(1000.0 + t as f64, &Readings { cpu: Some(10.0 + t as f64 / 3.0), temp: Some(45.5), ..Default::default() });
+            h.record_slow(1000.0 + t as f64, &Readings { cpu: Some(10.0 + t as f64 / 3.0), temp: Some(45.5), cores: vec![Some(10.0), Some(20.0), Some(30.0), Some(40.0 + t as f64 / 10.0)], ..Default::default() });
         }
         h
     }
@@ -150,6 +166,10 @@ mod tests {
                 assert!((a.mean - b.mean).abs() < 0.01 && (a.max - b.max).abs() < 0.01);
             }
         }
+        let cores = fresh.archive_cores(None);
+        assert_eq!(cores.len(), 4);
+        assert_eq!(cores[1].len(), 3);
+        assert!((cores[3][0].mean - 40.45).abs() < 0.01);
         h.reset();
     }
 
