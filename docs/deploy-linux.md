@@ -59,6 +59,21 @@ Environment=RPI_MONITOR_PORT=9090
 
 et `sudo systemctl restart rpi-monitor`. Un port invalide ou déjà occupé donne un message explicite dans `journalctl`.
 
+### Accès depuis le réseau local
+
+Par défaut le service n'écoute que sur `127.0.0.1` : il n'est joignable que depuis le Pi lui-même. Pour l'ouvrir à un autre appareil du réseau local (`http://<nom-du-pi>.local:8765`), il faut qu'il écoute sur toutes les interfaces :
+
+```sh
+sudo systemctl edit rpi-monitor
+```
+
+```ini
+[Service]
+Environment=RPI_MONITOR_HOST=0.0.0.0
+```
+
+puis `sudo systemctl restart rpi-monitor`. Le mot de passe reste demandé.
+
 ### Accès hors du réseau local
 
 Le service n'écoute que sur `127.0.0.1` : rien n'est ouvert sur le réseau. Pour le consulter à distance, publier ce port local avec un **tunnel de votre choix** (Tailscale Funnel, Cloudflare Tunnel, etc.). Le service est indépendant du tunnel choisi.
@@ -94,3 +109,16 @@ sudo systemctl daemon-reload
 ### Ressources
 
 Pas de base de données : l'historique de 48 h tient en mémoire (quelques Mo) et est sauvegardé dans un seul fichier JSON (`history.json` dans le dossier, environ 5 Mo) toutes les 10 minutes et à l'arrêt, soit une écriture disque par 10 minutes. Mesurer sur le Pi après installation : `systemctl status rpi-monitor` (mémoire), `top -p $(pidof rpi-monitor)` (CPU), `du -h ~/rpi-monitor`.
+
+### Dépannage
+
+Sur le Pi : `systemctl status rpi-monitor` et `journalctl -u rpi-monitor -n 20 --no-pager`.
+
+| Symptôme | Cause probable | Solution |
+|---|---|---|
+| Le service redémarre en boucle, code `2/INVALIDARGUMENT`, le journal affiche l'ancien texte d'aide | binaire trop ancien (sans la commande `serve`) | recopier le `dist/rpi-monitor` le plus récent, puis relancer `sudo sh install-service.sh` (le script refuse désormais un tel binaire) |
+| `mot de passe introuvable` | pas de fichier `password` dans le dossier | relancer `sudo sh install-service.sh`, qui le crée |
+| `droits trop ouverts` | le fichier `password` est lisible par d'autres | `chmod 600 password` |
+| `port ... déjà utilisé` | un autre programme (ou une TUI en mode serveur) utilise le port | changer `RPI_MONITOR_PORT` ou arrêter l'autre programme |
+| La page ne répond pas depuis un autre appareil, mais `curl http://127.0.0.1:8765/api/v1/health` marche sur le Pi | le service n'écoute que sur `127.0.0.1` | voir « Accès depuis le réseau local » |
+| Le dossier a été déplacé : le service ne démarre plus | l'unité mémorise l'ancien chemin | relancer `sudo sh install-service.sh` depuis le nouveau dossier |
