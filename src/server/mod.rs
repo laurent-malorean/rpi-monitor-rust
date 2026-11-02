@@ -10,11 +10,11 @@ use auth::{Auth, Login};
 use serde_json::json;
 use config::Config;
 use std::io::Read;
-use std::net::{SocketAddr, TcpListener};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tiny_http::{Header, Server};
 
 const INDEX_HTML: &str = include_str!("../../web/index.html");
@@ -145,10 +145,17 @@ impl Running {
         self.addr
     }
 
+    /// Arrête les workers puis attend que le port soit réellement libéré (2 s au plus) :
+    /// le thread d'acceptation de tiny_http se ferme avec un léger retard, et un redémarrage
+    /// immédiat du service (systemd) ne doit pas trouver « port déjà utilisé ».
     pub fn stop(self) {
         self.stop.store(true, Ordering::SeqCst);
         for w in self.workers {
             let _ = w.join();
+        }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline && TcpStream::connect_timeout(&self.addr, Duration::from_millis(100)).is_ok() {
+            std::thread::sleep(Duration::from_millis(5));
         }
     }
 }
