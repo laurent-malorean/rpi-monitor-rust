@@ -21,6 +21,10 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(Command::Run { demo }) => run(demo),
+        Ok(Command::Serve(_)) => {
+            eprintln!("serve : pas encore disponible");
+            ExitCode::FAILURE
+        }
         Err(e) => {
             eprintln!("{e}\n\n{USAGE}");
             ExitCode::from(2)
