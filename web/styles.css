@@ -1,12 +1,14 @@
 :root {
   --bg: #f4f5f7; --card: #ffffff; --text: #16181d; --muted: #6a7280; --line: #e3e6ea;
   --accent: #1d4ed8; --ok: #15803d; --bad: #b91c1c; --warn: #b45309;
+  --c-core0: #2563eb; --c-core1: #dc2626; --c-core2: #059669; --c-core3: #d97706; --c-core4: #7c3aed; --c-core5: #0891b2; --c-core6: #be185d; --c-core7: #65a30d;
   --c-cpu: #2563eb; --c-freq: #7c3aed; --c-power: #d97706; --c-ram: #0891b2; --c-temp: #dc2626; --c-fan: #059669; --c-throttle: #be123c;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0e1116; --card: #171b22; --text: #e8eaee; --muted: #97a0ae; --line: #2a303a;
     --accent: #3b82f6; --ok: #4ade80; --bad: #f87171; --warn: #fbbf24;
+    --c-core0: #60a5fa; --c-core1: #f87171; --c-core2: #34d399; --c-core3: #fbbf24; --c-core4: #a78bfa; --c-core5: #22d3ee; --c-core6: #f472b6; --c-core7: #a3e635;
     --c-cpu: #60a5fa; --c-freq: #a78bfa; --c-power: #fbbf24; --c-ram: #22d3ee; --c-temp: #f87171; --c-fan: #34d399; --c-throttle: #fb7185;
   }
 }
@@ -46,11 +48,15 @@ main.stale .card { opacity: .6; }
 .value.na { color: var(--muted); font-size: 22px; padding: 8px 0; font-weight: 500; }
 .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .stats { display: flex; flex-direction: column; align-items: flex-end; font-size: 12.5px; line-height: 1.3; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.legend:empty { display: none; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 .detail { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .stats b { color: var(--text); font-weight: 600; }
 .chart { position: relative; margin-top: 8px; }
 .chart svg { display: block; width: 100%; height: 120px; background: transparent; touch-action: pan-y; }
 .chart .grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart .line.thin { stroke-width: 1.6; }
 .chart .line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .chart .band { opacity: .15; stroke: none; }
 .chart .bar { stroke: none; }

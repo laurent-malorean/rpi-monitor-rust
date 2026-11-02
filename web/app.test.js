@@ -21,6 +21,19 @@ const tests = {
     assert.equal(t.fmtValue(null, by('cpu')), '--', 'indisponible, jamais 0');
     assert.equal(t.fmtValue(NaN, by('temp')), '--');
   },
+  'coreColor / coreLabel : une couleur par cœur, qui reboucle au-delà de 8'() {
+    assert.equal(t.coreColor(0), 'var(--c-core0)');
+    assert.equal(t.coreColor(3), 'var(--c-core3)');
+    assert.equal(t.coreColor(8), 'var(--c-core0)');
+    assert.equal(t.coreLabel(0), 'Cœur 1');
+    assert.equal(t.coreLabel(3), 'Cœur 4');
+  },
+  'nearestPoint : le point le plus proche, ou rien dans un trou'() {
+    const pts = [[0, 1, 1, 1], [10, 2, 2, 2], [5000, 3, 3, 3]];
+    assert.equal(t.nearestPoint(pts, 11, 10)[1], 2);
+    assert.equal(t.nearestPoint(pts, 2500, 10), null, 'au milieu d un trou');
+    assert.equal(t.nearestPoint([], 5, 10), null);
+  },
   'segments : un trou coupe la courbe au lieu de la relier'() {
     const pts = [[0, 1, 1, 1], [10, 2, 2, 2], [20, 3, 3, 3], [5000, 4, 4, 4], [5010, 5, 5, 5]];
     const segs = t.segments(pts, 10);

@@ -54,6 +54,8 @@ Sept indicateurs empilés : la valeur actuelle en gros à gauche (avec min / max
 ![Interface Web de rpi-monitor-rust sur un Raspberry Pi 5 (thème sombre, période 15 min)](docs/screen-web.png)
 
 - Les 7 indicateurs : valeur actuelle, **min / moyenne / max** sur la période, courbe avec la plage min-max, info-bulle au survol.
+- **CPU par cœur** : le chiffre est la moyenne de tous les cœurs, la courbe affiche **un cœur par couleur** (légende, et détail de chacun dans l'info-bulle).
+- La **version** du service (commit et date de compilation) s'affiche dans l'en-tête, pour savoir quel binaire tourne.
 - **Période au choix** : 15 min, 1 h, 6 h, 24 h, 48 h.
 - **Événements** du ventilateur et du throttling (début, fin, durée), détail du ventilateur (niveau, PWM, tr/min), indicateurs de throttling en cours ou survenus depuis le démarrage.
 - **Actualisation automatique** chaque seconde ; une donnée indisponible est signalée, et la **perte de connexion** avec le serveur est affichée (bannière, valeurs grisées).

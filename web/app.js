@@ -62,6 +62,22 @@ function extent(points, fixed) {
   return [lo - pad, hi + pad];
 }
 
+/** Une couleur par cœur (reboucle au-delà de 8). */
+function coreColor(i) {
+  return `var(--c-core${i % 8})`;
+}
+
+function coreLabel(i) {
+  return 'Cœur ' + (i + 1);
+}
+
+/** Point le plus proche de `ts`, ou null s'il tombe dans un trou (plus de 2,5 pas). */
+function nearestPoint(points, ts, step) {
+  let best = null;
+  for (const p of points) if (!best || Math.abs(p[0] - ts) < Math.abs(best[0] - ts)) best = p;
+  return best && Math.abs(best[0] - ts) <= step * 2.5 ? best : null;
+}
+
 function isConnectionLost(lastOkMs, nowMs) {
   return !lastOkMs || nowMs - lastOkMs > LOST_AFTER_MS;
 }
@@ -131,7 +147,8 @@ function timeLabel(ts, period) {
 const W = 600;
 const H = 120;
 
-function drawChart(box, m, points, step, period, now) {
+function drawChart(box, m, points, step, period, now, cores) {
+  const perCore = m.id === 'cpu' && cores.some((c) => c.length);
   box.textContent = '';
   const t0 = now - period;
   const x = (ts) => ((ts - t0) / period) * W;
@@ -145,6 +162,13 @@ function drawChart(box, m, points, step, period, now) {
       const bh = Math.max(p[1] > 0 ? 3 : 0, p[1] * (H - 6));
       svg.append(s('rect', { class: 'bar', x: x(p[0]).toFixed(1), y: (H - 3 - bh).toFixed(1), width: Math.max(1.5, (step / period) * W).toFixed(1), height: bh.toFixed(1), fill: color }));
     }
+  } else if (perCore) {
+    cores.forEach((pts, i) => {
+      for (const seg of segments(pts, step)) {
+        svg.append(s('path', { class: 'line thin', d: pathFor(seg, x, y), stroke: coreColor(i) }));
+        if (seg.length === 1) svg.append(s('circle', { cx: x(seg[0][0]), cy: y(seg[0][1]), r: 2, fill: coreColor(i) }));
+      }
+    });
   } else {
     for (const seg of segments(points, step)) {
       const top = seg.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(p[3]).toFixed(1)).join('');
@@ -161,7 +185,7 @@ function drawChart(box, m, points, step, period, now) {
   if (m.kind === 'line') {
     box.append(h('span', { class: 'ylab top' }, fmt(hi, m.decimals)), h('span', { class: 'ylab bottom' }, fmt(lo, m.decimals)));
   }
-  if (!points.length) box.append(h('div', { class: 'nodata' }, 'Aucune donnée sur la période'));
+  if (!points.length && !perCore) box.append(h('div', { class: 'nodata' }, 'Aucune donnée sur la période'));
 
   const tip = h('div', { class: 'tip' });
   tip.hidden = true;
@@ -169,14 +193,22 @@ function drawChart(box, m, points, step, period, now) {
   const move = (ev) => {
     const r = svg.getBoundingClientRect();
     const ts = t0 + ((ev.clientX - r.left) / r.width) * period;
-    let best = null;
-    for (const p of points) if (!best || Math.abs(p[0] - ts) < Math.abs(best[0] - ts)) best = p;
-    if (!best || Math.abs(best[0] - ts) > step * 2.5) return leave();
+    const best = nearestPoint(points, ts, step);
+    if (!best) return leave();
     cursor.setAttribute('x1', x(best[0]));
     cursor.setAttribute('x2', x(best[0]));
     cursor.setAttribute('visibility', 'visible');
-    const val = m.kind === 'bar' ? Math.round(best[1] * 100) + ' % du temps' : fmt(best[1], m.decimals) + ' ' + (state.meta[m.id] ? state.meta[m.id].unit : '');
-    tip.textContent = timeLabel(best[0], period) + ' · ' + val;
+    tip.textContent = '';
+    if (perCore) {
+      tip.append(h('div', null, timeLabel(best[0], period) + ' · moyenne ' + fmtValue(best[1], m) + ' %'));
+      cores.forEach((pts, i) => {
+        const p = nearestPoint(pts, ts, step);
+        tip.append(h('div', null, h('span', { class: 'swatch', style: 'background:' + coreColor(i) }), coreLabel(i) + ' : ' + (p ? fmtValue(p[1], m) + ' %' : '--')));
+      });
+    } else {
+      const val = m.kind === 'bar' ? Math.round(best[1] * 100) + ' % du temps' : fmt(best[1], m.decimals) + ' ' + (state.meta[m.id] ? state.meta[m.id].unit : '');
+      tip.textContent = timeLabel(best[0], period) + ' · ' + val;
+    }
     tip.hidden = false;
     const left = ((x(best[0]) / W) * r.width);
     tip.style.left = Math.min(Math.max(left - 40, 0), r.width - tip.offsetWidth) + 'px';
@@ -207,11 +239,12 @@ function ensureCards() {
       value: h('div', { class: 'value na' }, '--'),
       stats: h('div', { class: 'stats' }),
       detail: h('div'),
+      legend: h('div', { class: 'legend' }),
       chart: h('div', { class: 'chart' }),
       axis: h('div', { class: 'axis' }, h('span'), h('span')),
       events: h('div'),
     };
-    const el = h('section', { class: 'card', id: 'card-' + m.id }, h('h2', null, c.title, c.info), h('div', { class: 'head' }, c.value, c.stats), c.detail, c.chart, c.axis, c.events);
+    const el = h('section', { class: 'card', id: 'card-' + m.id }, h('h2', null, c.title, c.info), h('div', { class: 'head' }, c.value, c.stats), c.detail, c.legend, c.chart, c.axis, c.events);
     cards[m.id] = c;
     main.append(el);
   }
@@ -256,7 +289,12 @@ function render() {
       c.stats.append(h('span', null, 'actif ', h('b', null, Math.round(st.mean * 100) + ' %')), h('span', null, 'du temps'));
     }
     if (state.history && state.history.series[m.id]) {
-      drawChart(c.chart, m, state.history.series[m.id], state.history.step_s, state.history.period_s, now);
+      const cores = m.id === 'cpu' ? state.history.cpu_cores || [] : [];
+      c.legend.textContent = '';
+      if (cores.some((p) => p.length)) {
+        cores.forEach((_, i) => c.legend.append(h('span', null, h('span', { class: 'swatch', style: 'background:' + coreColor(i) }), coreLabel(i))));
+      }
+      drawChart(c.chart, m, state.history.series[m.id], state.history.step_s, state.history.period_s, now, cores);
       const [a, b] = c.axis.children;
       a.textContent = timeLabel(now - state.history.period_s, state.history.period_s);
       b.textContent = 'maintenant';
@@ -398,7 +436,7 @@ function start() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
+  module.exports = { coreColor, coreLabel, nearestPoint, fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
 } else {
   start();
 }
