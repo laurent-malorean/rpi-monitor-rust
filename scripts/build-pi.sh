@@ -14,4 +14,5 @@ cp "$CARGO_TARGET_DIR/$TARGET/release/rpi-monitor" dist/rpi-monitor
 # dist/ contient tout ce qu'il faut copier sur le Pi : le binaire, l'unité systemd et le script d'installation.
 cp deploy/rpi-monitor.service dist/rpi-monitor.service
 cp scripts/install-service.sh dist/install-service.sh
+cp scripts/stress-cpu.sh dist/stress-cpu.sh   # facultatif : charge les cœurs pour une capture d'écran
 echo "dist/ prêt à copier sur le Pi : rpi-monitor ($(du -h dist/rpi-monitor | cut -f1)), rpi-monitor.service, install-service.sh"

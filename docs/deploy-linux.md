@@ -16,11 +16,12 @@ Par défaut, le service cherche `password` et écrit `history.json` dans le doss
 
 ### Installation
 
-**1. Sur votre ordinateur** : le dossier `dist/` est recompilé automatiquement à chaque commit (hook `post-commit`), sinon `scripts/build-pi.sh`. Il contient les trois fichiers à copier, rien d'autre à aller chercher :
+**1. Sur votre ordinateur** : le dossier `dist/` est recompilé automatiquement à chaque commit (hook `post-commit`), sinon `scripts/build-pi.sh`. Il contient les fichiers à copier, rien d'autre à aller chercher :
 
 - `rpi-monitor` : le binaire
 - `rpi-monitor.service` : l'unité systemd
 - `install-service.sh` : le script d'installation
+- `stress-cpu.sh` : facultatif, charge chaque cœur différemment pour faire une capture d'écran (`sh stress-cpu.sh 180`, `Ctrl+C` pour arrêter)
 
 Les copier ensemble dans **un même dossier du Pi**, au choix (par exemple `~/rpi-monitor`) avec l'outil de transfert de votre choix : client SFTP graphique (FileZilla, WinSCP, Cyberduck…) ou `scp` en ligne de commande.
 

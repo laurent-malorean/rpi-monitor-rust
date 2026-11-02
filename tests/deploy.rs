@@ -85,3 +85,14 @@ fn build_script_puts_everything_to_copy_in_dist() {
     assert!(s.contains("dist/rpi-monitor"));
 }
 
+
+#[test]
+fn stress_script_is_valid_shell_stoppable_and_needs_no_root() {
+    let s = read("scripts/stress-cpu.sh");
+    assert!(s.starts_with("#!/bin/sh"));
+    assert!(s.contains("trap") && s.contains("nproc"), "s'arrête proprement et s'adapte au nombre de cœurs");
+    assert!(!s.contains("sudo"), "aucun privilège nécessaire");
+    assert!(read("scripts/build-pi.sh").contains("stress-cpu.sh"), "copié dans dist/ pour être lancé sur le Pi");
+    let ok = std::process::Command::new("sh").arg("-n").arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/stress-cpu.sh")).status().unwrap();
+    assert!(ok.success());
+}
