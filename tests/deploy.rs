@@ -49,3 +49,14 @@ fn install_script_is_valid_shell_and_never_embeds_a_password() {
     let ok = std::process::Command::new("sh").arg("-n").arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/install-service.sh")).status().unwrap();
     assert!(ok.success());
 }
+
+#[test]
+fn post_commit_hook_rebuilds_the_pi_binary_without_ever_failing_the_commit() {
+    use std::os::unix::fs::PermissionsExt;
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(".githooks/post-commit");
+    let h = read(".githooks/post-commit");
+    assert!(h.starts_with("#!/bin/sh") && h.contains("scripts/build-pi.sh"));
+    assert!(h.contains("|| ") , "un échec de build doit être signalé sans faire échouer le hook");
+    assert!(fs::metadata(&path).unwrap().permissions().mode() & 0o111 != 0, "le hook doit être exécutable");
+    assert!(std::process::Command::new("sh").arg("-n").arg(&path).status().unwrap().success());
+}

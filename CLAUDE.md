@@ -40,6 +40,8 @@ Quand l'utilisateur demande de commiter :
 - Dépendances ajoutées pour le service : `tiny_http`, `serde_json`, `ctrlc` (Rust pur). Interface Web dans `web/` (sans framework ni CDN) ; Node n'est utilisé que pour ses tests (`web/app.test.js`). Conception : `docs/architecture.md`.
 - Build Pi : `scripts/build-pi.sh` (cible `aarch64-unknown-linux-gnu` via `cargo-zigbuild`, résultat dans `dist/rpi-monitor`). Voir `docs/install.md`.
 
-## Hook pre-commit
+## Hooks git
 
 Un hook `pre-commit` (dans `.githooks/`, activé via `git config core.hooksPath .githooks`) lance `cargo test` avant chaque commit et bloque le commit si un test échoue. Sur un nouveau clone, lancer `git config core.hooksPath .githooks` pour l'activer.
+
+Un hook `post-commit` (même dossier) recompile ensuite le binaire du Pi (`scripts/build-pi.sh`) : `dist/rpi-monitor` est donc à jour après chaque commit. Un échec de build est signalé mais ne remet pas le commit en cause.

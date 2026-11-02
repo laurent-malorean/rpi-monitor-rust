@@ -1,0 +1,9 @@
+#!/bin/sh
+# Après chaque commit : recompile le binaire du Pi dans dist/rpi-monitor (prêt à copier).
+# Un échec de build (zig absent, etc.) est signalé mais ne remet jamais le commit en cause.
+for d in /opt/homebrew/opt/rustup/bin "$HOME/.cargo/bin"; do [ -d "$d" ] && PATH="$d:$PATH"; done
+export PATH
+sh scripts/build-pi.sh >/dev/null 2>&1 \
+  && echo "Binaire Pi à jour : dist/rpi-monitor" \
+  || echo "Build Pi échoué (voir : sh scripts/build-pi.sh)" >&2
+exit 0

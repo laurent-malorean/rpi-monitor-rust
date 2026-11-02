@@ -16,10 +16,9 @@ Par défaut, le service cherche `password` et écrit `history.json` dans le doss
 
 ### Installation
 
-**1. Sur le Mac** : compiler le binaire pour le Pi et copier les fichiers sur le Pi.
+**1. Sur le Mac** : le binaire `dist/rpi-monitor` est recompilé automatiquement à chaque commit (hook `post-commit`) ; sinon `scripts/build-pi.sh`. Copier les fichiers sur le Pi.
 
 ```sh
-scripts/build-pi.sh
 scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
 ```
 
@@ -65,10 +64,9 @@ Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel tr
 
 ### Mise à jour
 
-**1. Sur le Mac** : recompiler et recopier.
+**1. Sur le Mac** : le binaire est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier.
 
 ```sh
-scripts/build-pi.sh
 scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
 ```
 
