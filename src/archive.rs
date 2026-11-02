@@ -4,6 +4,11 @@
 use crate::history::Stats;
 use std::collections::VecDeque;
 
+/// Arrondi à 2 décimales (affichage, sauvegarde et API).
+pub fn round2(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
+}
+
 /// Une période terminée : valeurs moyenne, minimale et maximale des mesures disponibles.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point {

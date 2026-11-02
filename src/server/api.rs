@@ -1,6 +1,6 @@
 //! API JSON v1, en lecture seule. Fonction pure : testable sans socket.
 
-use crate::archive::Point;
+use crate::archive::{round2, Point};
 use crate::collector::{History, Key, ARCHIVE_S};
 use serde_json::{json, Map, Value};
 use std::sync::Mutex;
@@ -109,7 +109,7 @@ fn current(h: &History, info: &Info, now: f64) -> Value {
     let mut metrics = Map::new();
     for key in Key::ALL {
         let (id, label, unit) = meta(key);
-        let mut m = json!({ "label": label, "unit": unit, "value": h.snapshot(key).last });
+        let mut m = json!({ "label": label, "unit": unit, "value": h.snapshot(key).last.map(round2) });
         match key {
             Key::Fan => {
                 let f = h.fan_last();
@@ -136,7 +136,7 @@ fn history(h: &History, ks: &[Key], period_s: f64, max_points: usize, now: f64) 
     let mut series = Map::new();
     for &key in ks {
         let raw = h.archive_points(key, Some(now - period_s));
-        let pts: Vec<Value> = resample(&raw, step).iter().map(|p| json!([p.ts, p.mean, p.min, p.max])).collect();
+        let pts: Vec<Value> = resample(&raw, step).iter().map(|p| json!([p.ts, round2(p.mean), round2(p.min), round2(p.max)])).collect();
         series.insert(meta(key).0.into(), Value::Array(pts));
     }
     json!({ "period_s": period_s, "step_s": step, "series": series })
@@ -146,7 +146,7 @@ fn stats(h: &History, ks: &[Key], period_s: f64, now: f64) -> Value {
     let mut out = Map::new();
     for &key in ks {
         let s = h.archive_stats(key, Some(now - period_s));
-        out.insert(meta(key).0.into(), json!(s.map(|s| json!({ "min": s.minimum, "max": s.maximum, "mean": s.mean }))));
+        out.insert(meta(key).0.into(), json!(s.map(|s| json!({ "min": round2(s.minimum), "max": round2(s.maximum), "mean": round2(s.mean) }))));
     }
     json!({ "period_s": period_s, "stats": out })
 }
@@ -163,7 +163,7 @@ fn intervals(points: &[Point]) -> Vec<Value> {
             _ => out.push((p.ts, p.ts + STEP_S, p.mean)),
         }
     }
-    out.into_iter().map(|(start, end, peak)| json!({ "start": start, "end": end, "peak": peak })).collect()
+    out.into_iter().map(|(start, end, peak)| json!({ "start": start, "end": end, "peak": round2(peak) })).collect()
 }
 
 fn events(h: &History, period_s: f64, now: f64) -> Value {
@@ -397,5 +397,18 @@ mod tests {
         let (_, v) = get(&long_history(), "/api/v1/metrics/history?period=172800", 24.0 * 3600.0);
         let total: usize = v["series"].as_object().unwrap().values().map(|a| a.as_array().unwrap().len()).sum();
         assert!(total <= 7 * 600);
+    }
+
+    #[test]
+    fn numbers_are_rounded_to_two_decimals_to_keep_payloads_small() {
+        let mut h = History::new();
+        h.record_slow(1000.0, &Readings { cpu: Some(12.345678), temp: Some(40.004), ..Default::default() });
+        let h = Mutex::new(h);
+        let (_, cur) = get(&h, "/api/v1/metrics/current", 1001.0);
+        assert_eq!(cur["metrics"]["cpu"]["value"].as_f64(), Some(12.35));
+        let (_, hist) = get(&h, "/api/v1/metrics/history?key=cpu", 1001.0);
+        assert_eq!(hist["series"]["cpu"][0][1].as_f64(), Some(12.35));
+        let (_, st) = get(&h, "/api/v1/metrics/stats", 1001.0);
+        assert_eq!(st["stats"]["temp"]["mean"].as_f64(), Some(40.0));
     }
 }

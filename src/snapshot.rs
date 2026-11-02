@@ -1,7 +1,7 @@
 //! Persistance de l'historique long : un fichier JSON écrit de façon atomique,
 //! relu au démarrage pour survivre à un redémarrage du service.
 
-use crate::archive::Point;
+use crate::archive::{round2, Point};
 use crate::collector::{History, Key};
 use serde_json::{json, Value};
 use std::path::Path;
@@ -14,10 +14,6 @@ pub const FILE: &str = "history.json";
 const VERSION: u64 = 1;
 
 type Data = Vec<(Key, Vec<Point>)>;
-
-fn round2(v: f64) -> f64 {
-    (v * 100.0).round() / 100.0
-}
 
 fn write(data: &Data, dir: &Path) -> Result<(), String> {
     let mut series = serde_json::Map::new();
