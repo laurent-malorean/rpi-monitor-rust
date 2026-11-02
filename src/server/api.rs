@@ -18,10 +18,11 @@ pub struct Response {
     pub status: u16,
     pub content_type: &'static str,
     pub body: Vec<u8>,
+    pub set_cookie: Option<String>,
 }
 
 fn json_response(status: u16, v: Value) -> Response {
-    Response { status, content_type: "application/json", body: v.to_string().into_bytes() }
+    Response { status, content_type: "application/json", body: v.to_string().into_bytes(), set_cookie: None }
 }
 
 fn error(status: u16, msg: impl Into<String>) -> Response {
