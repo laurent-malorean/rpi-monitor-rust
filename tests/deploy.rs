@@ -60,3 +60,10 @@ fn post_commit_hook_rebuilds_the_pi_binary_without_ever_failing_the_commit() {
     assert!(fs::metadata(&path).unwrap().permissions().mode() & 0o111 != 0, "le hook doit être exécutable");
     assert!(std::process::Command::new("sh").arg("-n").arg(&path).status().unwrap().success());
 }
+
+#[test]
+fn build_script_puts_everything_to_copy_in_dist() {
+    let s = read("scripts/build-pi.sh");
+    assert!(s.contains("deploy/rpi-monitor.service") && s.contains("scripts/install-service.sh"), "dist/ doit contenir l'unité et le script d'installation");
+    assert!(s.contains("dist/rpi-monitor"));
+}

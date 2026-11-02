@@ -16,11 +16,13 @@ Par défaut, le service cherche `password` et écrit `history.json` dans le doss
 
 ### Installation
 
-**1. Sur votre ordinateur** : obtenir le binaire `dist/rpi-monitor` (recompilé automatiquement à chaque commit par le hook `post-commit`, sinon `scripts/build-pi.sh`). Copier ces trois fichiers vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`) avec l'outil de transfert de votre choix : client SFTP graphique (FileZilla, WinSCP, Cyberduck…) ou `scp` en ligne de commande :
+**1. Sur votre ordinateur** : le dossier `dist/` est recompilé automatiquement à chaque commit (hook `post-commit`), sinon `scripts/build-pi.sh`. Il contient les trois fichiers à copier, rien d'autre à aller chercher :
 
-- `dist/rpi-monitor` : le binaire
-- `deploy/rpi-monitor.service` : l'unité systemd
-- `scripts/install-service.sh` : le script d'installation
+- `rpi-monitor` : le binaire
+- `rpi-monitor.service` : l'unité systemd
+- `install-service.sh` : le script d'installation
+
+Les copier vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`) avec l'outil de transfert de votre choix : client SFTP graphique (FileZilla, WinSCP, Cyberduck…) ou `scp` en ligne de commande.
 
 **2. Sur le Pi** (en SSH ou au clavier) : lancer l'installation.
 
@@ -64,7 +66,7 @@ Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel tr
 
 ### Mise à jour
 
-**1. Sur votre ordinateur** : le binaire est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier les trois mêmes fichiers (`dist/rpi-monitor`, `deploy/rpi-monitor.service`, `scripts/install-service.sh`) vers le dossier personnel du Pi, avec le même outil de transfert.
+**1. Sur votre ordinateur** : `dist/` est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier ses trois fichiers vers le dossier personnel du Pi, avec le même outil de transfert.
 
 **2. Sur le Pi** : relancer le script, qui arrête le service, remplace le binaire, conserve le mot de passe et l'historique, puis redémarre.
 
