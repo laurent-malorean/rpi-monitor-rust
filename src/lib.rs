@@ -6,3 +6,4 @@ pub mod history;
 pub mod render;
 pub mod sensors;
 pub mod ui;
+pub mod server;
