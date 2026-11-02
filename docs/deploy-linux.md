@@ -16,15 +16,22 @@ Par défaut, le service cherche `password` et écrit `history.json` dans le doss
 
 ### Installation
 
+**1. Sur le Mac** : compiler le binaire pour le Pi et copier les fichiers sur le Pi.
+
 ```sh
 scripts/build-pi.sh
 scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
-ssh -t <utilisateur>@<pi> sudo sh install-service.sh
 ```
 
-Le script crée l'utilisateur système `rpi-monitor` (groupe `video`, pour lire les capteurs), installe le binaire et l'unité, demande le **mot de passe d'accès** (écrit dans `/opt/rpi-monitor/password`, droits 600) puis active et démarre le service. Au démarrage du Pi, le service se lance seul et redémarre en cas de panne (`Restart=always`).
+**2. Sur le Pi** (en SSH) : lancer l'installation.
 
-Vérifier : `systemctl status rpi-monitor`, `journalctl -u rpi-monitor -f`, puis `curl http://127.0.0.1:8765/api/v1/health` depuis le Pi.
+```sh
+sudo sh install-service.sh
+```
+
+Le script crée l'utilisateur système `rpi-monitor` (groupe `video`, pour lire les capteurs), installe le binaire dans `/opt/rpi-monitor` et l'unité dans `/etc/systemd/system`, demande le **mot de passe d'accès** (écrit dans `/opt/rpi-monitor/password`, droits 600) puis active et démarre le service. Au démarrage du Pi, le service se lance seul et redémarre en cas de panne (`Restart=always`).
+
+Vérifier, sur le Pi : `systemctl status rpi-monitor`, `journalctl -u rpi-monitor -f`, puis `curl http://127.0.0.1:8765/api/v1/health` depuis le Pi.
 
 Changer le mot de passe : éditer `/opt/rpi-monitor/password` (conserver les droits 600, propriétaire `rpi-monitor`), puis `sudo systemctl restart rpi-monitor`.
 
@@ -58,17 +65,24 @@ Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel tr
 
 ### Mise à jour
 
-Relancer simplement le script d'installation avec le nouveau binaire : il arrête le service, remplace le binaire, conserve le mot de passe et l'historique, puis redémarre.
+**1. Sur le Mac** : recompiler et recopier.
 
 ```sh
 scripts/build-pi.sh
 scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
-ssh -t <utilisateur>@<pi> sudo sh install-service.sh
+```
+
+**2. Sur le Pi** : relancer le script, qui arrête le service, remplace le binaire, conserve le mot de passe et l'historique, puis redémarre.
+
+```sh
+sudo sh install-service.sh
 ```
 
 L'arrêt écrit une dernière sauvegarde : l'historique est conservé (le temps d'arrêt apparaît comme un trou dans les courbes).
 
 ### Désinstallation
+
+Sur le Pi :
 
 ```sh
 sudo systemctl disable --now rpi-monitor
