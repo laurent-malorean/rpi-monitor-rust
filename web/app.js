@@ -349,6 +349,13 @@ function setPeriod(sec) {
   refreshSlow();
 }
 
+async function showVersion() {
+  try {
+    const h = await api('/api/v1/health');
+    document.getElementById('version').textContent = 'v' + h.version;
+  } catch (_) { /* affichée au prochain chargement */ }
+}
+
 function start() {
   try {
     const saved = Number(localStorage.getItem('rpimon.period'));
@@ -385,6 +392,7 @@ function start() {
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { state.lastSlow = 0; tick(); } });
   document.getElementById('logout').hidden = false;
+  showVersion();
   tick();
   setInterval(tick, 1000);
 }

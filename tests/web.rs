@@ -52,3 +52,10 @@ fn js_logic_passes_its_node_tests() {
     };
     assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
 }
+
+#[test]
+fn page_shows_which_build_is_running() {
+    assert!(web("index.html").contains("id=\"version\""));
+    let js = web("app.js");
+    assert!(js.contains("/api/v1/health") && js.contains("version"));
+}

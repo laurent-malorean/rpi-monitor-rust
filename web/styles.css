@@ -27,6 +27,7 @@ body {
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #9ca3af; }
 .status.ok .dot { background: #4ade80; }
 .status.lost .dot { background: #fca5a5; }
+.version { font-size: 11px; opacity: .8; }
 .periods { display: flex; gap: 4px; flex-wrap: wrap; }
 .periods button, .link, .login button {
   font: inherit; cursor: pointer; border: 1px solid transparent; border-radius: 8px;

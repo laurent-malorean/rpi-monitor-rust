@@ -5,6 +5,9 @@ use crate::collector::{History, Key, ARCHIVE_S};
 use serde_json::{json, Map, Value};
 use std::sync::Mutex;
 
+/// Version et commit du binaire en cours (affichés dans l'interface pour savoir ce qui tourne).
+pub const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("RPI_MONITOR_BUILD"));
+
 const STEP_S: f64 = 10.0;
 const DEFAULT_PERIOD_S: f64 = 3600.0;
 const DEFAULT_MAX_POINTS: usize = 600;
@@ -180,7 +183,7 @@ pub fn handle(method: &str, url: &str, history_lock: &Mutex<History>, info: &Inf
     let parsed = || -> Result<(Vec<Key>, f64), String> { Ok((keys(&q)?, period(&q)?)) };
     match path {
         "/api/v1/health" => {
-            json_response(200, json!({ "status": "ok", "uptime_s": now - info.started_at, "demo": info.demo }))
+            json_response(200, json!({ "status": "ok", "version": VERSION, "uptime_s": now - info.started_at, "demo": info.demo }))
         }
         "/api/v1/metrics/current" => json_response(200, current(&lock(history_lock), info, now)),
         "/api/v1/metrics/history" => match parsed().and_then(|(ks, p)| Ok((ks, p, max_points(&q)?))) {
@@ -410,5 +413,13 @@ mod tests {
         assert_eq!(hist["series"]["cpu"][0][1].as_f64(), Some(12.35));
         let (_, st) = get(&h, "/api/v1/metrics/stats", 1001.0);
         assert_eq!(st["stats"]["temp"]["mean"].as_f64(), Some(40.0));
+    }
+
+    #[test]
+    fn health_reports_the_running_build() {
+        let (_, v) = get(&Mutex::new(History::new()), "/api/v1/health", 1.0);
+        let version = v["version"].as_str().unwrap();
+        assert!(version.starts_with(env!("CARGO_PKG_VERSION")) && version.len() > env!("CARGO_PKG_VERSION").len(), "{version}");
+        assert_eq!(version, VERSION);
     }
 }
