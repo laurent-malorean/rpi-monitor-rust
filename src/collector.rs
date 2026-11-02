@@ -77,6 +77,7 @@ pub struct History {
     throttle: BucketSeries,
     fan_last: Option<FanReading>,
     throttle_last: Option<Throttle>,
+    cores_last: Vec<Option<f64>>,
     archive: [Series; 7], // 48 h horodatées, indexées comme `Key::ALL`
     cores: Vec<Series>,   // 48 h par cœur de CPU, créées au fur et à mesure
 }
@@ -100,6 +101,7 @@ impl History {
             throttle: BucketSeries::new(BUCKET_S, HISTORY_S / BUCKET_S as usize),
             fan_last: None,
             throttle_last: None,
+            cores_last: vec![],
             archive: std::array::from_fn(|_| Series::new(ARCHIVE_STEP_S, ARCHIVE_S)),
             cores: vec![],
         }
@@ -129,6 +131,7 @@ impl History {
         self.throttle.add(ts, throttling);
         self.archive[Key::Throttle.index()].add(ts, throttling.map(f64::from));
         self.throttle_last = r.throttle.clone();
+        self.cores_last = r.cores.clone();
     }
 
     pub fn snapshot(&self, key: Key) -> Snapshot {
@@ -181,6 +184,11 @@ impl History {
 
     pub fn archive_stats(&self, key: Key, since: Option<f64>) -> Option<Stats> {
         self.archive[key.index()].stats(since)
+    }
+
+    /// Dernière charge de chaque cœur (vide si indisponible).
+    pub fn cores_last(&self) -> Vec<Option<f64>> {
+        self.cores_last.clone()
     }
 
     pub fn fan_last(&self) -> Option<FanReading> {

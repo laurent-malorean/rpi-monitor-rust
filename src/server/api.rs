@@ -127,6 +127,7 @@ fn current(h: &History, info: &Info, now: f64) -> Value {
                 m["now"] = json!(t.as_ref().map(|t| t.now.clone()));
                 m["since_boot"] = json!(t.as_ref().map(|t| t.since_boot.clone()));
             }
+            Key::Cpu => m["cores"] = json!(h.cores_last().into_iter().map(|c| c.map(round2)).collect::<Vec<_>>()),
             _ => {}
         }
         metrics.insert(id.into(), m);
@@ -142,7 +143,16 @@ fn history(h: &History, ks: &[Key], period_s: f64, max_points: usize, now: f64) 
         let pts: Vec<Value> = resample(&raw, step).iter().map(|p| json!([p.ts, round2(p.mean), round2(p.min), round2(p.max)])).collect();
         series.insert(meta(key).0.into(), Value::Array(pts));
     }
-    json!({ "period_s": period_s, "step_s": step, "series": series })
+    let mut out = json!({ "period_s": period_s, "step_s": step, "series": series });
+    if ks.contains(&Key::Cpu) {
+        let cores: Vec<Value> = h
+            .archive_cores(Some(now - period_s))
+            .iter()
+            .map(|c| Value::Array(resample(c, step).iter().map(|p| json!([p.ts, round2(p.mean), round2(p.min), round2(p.max)])).collect()))
+            .collect();
+        out["cpu_cores"] = Value::Array(cores);
+    }
+    out
 }
 
 fn stats(h: &History, ks: &[Key], period_s: f64, now: f64) -> Value {
@@ -421,5 +431,48 @@ mod tests {
         let version = v["version"].as_str().unwrap();
         assert!(version.starts_with(env!("CARGO_PKG_VERSION")) && version.len() > env!("CARGO_PKG_VERSION").len(), "{version}");
         assert_eq!(version, VERSION);
+    }
+
+    fn with_cores() -> Mutex<History> {
+        let mut h = History::new();
+        for t in 0..30 {
+            h.record_slow(1000.0 + t as f64, &Readings { cpu: Some(40.0), cores: vec![Some(10.0), Some(90.0 + (t % 2) as f64 / 3.0), None, Some(40.0)], ..Default::default() });
+        }
+        Mutex::new(h)
+    }
+
+    #[test]
+    fn current_cpu_lists_each_core_with_null_when_unavailable() {
+        let (_, v) = get(&with_cores(), "/api/v1/metrics/current", 1030.0);
+        let cores = v["metrics"]["cpu"]["cores"].as_array().unwrap();
+        assert_eq!(cores.len(), 4);
+        assert_eq!((cores[0].as_f64(), cores[3].as_f64()), (Some(10.0), Some(40.0)));
+        assert!(cores[2].is_null(), "un cœur sans mesure : null, jamais 0");
+        assert_eq!(v["metrics"]["cpu"]["value"].as_f64(), Some(40.0), "le chiffre reste la moyenne globale");
+    }
+
+    #[test]
+    fn current_cpu_cores_is_empty_when_the_machine_gives_none() {
+        let (_, v) = get(&filled(), "/api/v1/metrics/current", 1030.0);
+        assert_eq!(v["metrics"]["cpu"]["cores"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn history_gives_one_series_per_core_next_to_the_cpu_series() {
+        let (s, v) = get(&with_cores(), "/api/v1/metrics/history?key=cpu&period=60", 1030.0);
+        assert_eq!(s, 200);
+        let cores = v["cpu_cores"].as_array().unwrap();
+        assert_eq!(cores.len(), 4);
+        assert_eq!(cores[0][0][1].as_f64(), Some(10.0)); // [ts, moyenne, min, max]
+        assert!(cores[2].as_array().unwrap().is_empty());
+        assert_eq!(v["series"].as_object().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn core_series_only_come_with_the_cpu() {
+        let (_, v) = get(&with_cores(), "/api/v1/metrics/history?key=temp", 1030.0);
+        assert!(v.get("cpu_cores").is_none());
+        let (_, all) = get(&with_cores(), "/api/v1/metrics/history", 1030.0);
+        assert_eq!(all["cpu_cores"].as_array().unwrap().len(), 4);
     }
 }
