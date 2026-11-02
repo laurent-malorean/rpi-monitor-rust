@@ -51,7 +51,7 @@ Sept indicateurs empilés : la valeur actuelle en gros à gauche (avec min / max
 
 ## Interface Web
 
-![Interface Web de rpi-monitor-rust (mode démo)](docs/screen-web.png)
+![Interface Web de rpi-monitor-rust sur un Raspberry Pi 5 (thème sombre, période 15 min)](docs/screen-web.png)
 
 - Les 7 indicateurs : valeur actuelle, **min / moyenne / max** sur la période, courbe avec la plage min-max, info-bulle au survol.
 - **Période au choix** : 15 min, 1 h, 6 h, 24 h, 48 h.
@@ -143,7 +143,7 @@ Pour ajouter une métrique : une méthode dans `Sensors`, une série dans `Histo
 
 - 180 tests automatiques, qui ne nécessitent aucun Raspberry Pi (les lectures `/sys` et `/proc` sont testées sur des arbres de fichiers simulés ; le serveur est testé avec de vraies sockets sur un port éphémère ; la logique de l'interface Web est testée avec Node si présent).
 - Le mode démo a été vérifié dans un vrai terminal sur Mac, et la compilation croisée pour le Pi fonctionne.
-- Le service et l'interface Web ont été vérifiés sur Mac en mode démo (navigateur ordinateur et téléphone, perte de connexion, arrêt par SIGTERM).
+- Le service et l'interface Web tournent sur un vrai Raspberry Pi 5 (capture ci-dessus) ; ils ont aussi été vérifiés sur Mac en mode démo (navigateur ordinateur et téléphone, perte de connexion, arrêt par SIGTERM).
 - **À valider** : l'exécution complète sur un vrai Raspberry Pi 5 (chemins sysfs, `vcgencmd`, service systemd), la mesure de la consommation CPU / RAM / disque du service, et la comparaison de performances avec la version Python (mémoire, CPU, démarrage).
 
 ## Documentation
