@@ -1,8 +1,10 @@
 #!/bin/sh
 # Installe rpi-monitor comme service systemd, à lancer SUR LE PI : sudo sh install-service.sh
-# Prérequis : dist/rpi-monitor (ou ./rpi-monitor) et rpi-monitor.service dans le dossier courant.
-# Le mot de passe est demandé ici (jamais passé en argument) puis rangé dans un fichier 600.
+# Prérequis : rpi-monitor et rpi-monitor.service dans le dossier courant.
+# Tout est rangé dans /opt/rpi-monitor : binaire, mot de passe (« password », droits 600), sauvegarde.
+# Le mot de passe est demandé ici (jamais passé en argument).
 set -e
+DIR=/opt/rpi-monitor
 [ "$(id -u)" -eq 0 ] || { echo "À lancer avec sudo." >&2; exit 1; }
 BIN=""
 for f in ./rpi-monitor ./dist/rpi-monitor; do [ -f "$f" ] && BIN="$f" && break; done
@@ -10,19 +12,22 @@ UNIT=""
 for f in ./rpi-monitor.service ./deploy/rpi-monitor.service; do [ -f "$f" ] && UNIT="$f" && break; done
 [ -n "$BIN" ] && [ -n "$UNIT" ] || { echo "Binaire ou unité introuvable (voir docs/install.md)." >&2; exit 1; }
 
-install -m 755 "$BIN" /usr/local/bin/rpi-monitor
+id rpi-monitor >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin --groups video rpi-monitor
+install -d -m 750 -o rpi-monitor -g rpi-monitor "$DIR"
+systemctl stop rpi-monitor 2>/dev/null || true
+install -m 755 -o root -g root "$BIN" "$DIR/rpi-monitor"
 install -m 644 "$UNIT" /etc/systemd/system/rpi-monitor.service
 
-install -d -m 700 /etc/rpi-monitor
-if [ ! -f /etc/rpi-monitor/password ]; then
+if [ ! -f "$DIR/password" ]; then
   printf "Mot de passe d'accès (16 caractères ou plus recommandés) : "
   stty -echo; read -r PW; stty echo; echo
   [ "${#PW}" -ge 8 ] || { echo "Mot de passe trop court." >&2; exit 1; }
   umask 077
-  printf '%s\n' "$PW" > /etc/rpi-monitor/password
-  chmod 600 /etc/rpi-monitor/password
+  printf '%s\n' "$PW" > "$DIR/password"
+  chown rpi-monitor:rpi-monitor "$DIR/password"
+  chmod 600 /opt/rpi-monitor/password
 else
-  echo "Mot de passe existant conservé (/etc/rpi-monitor/password)."
+  echo "Mot de passe existant conservé ($DIR/password)."
 fi
 
 systemctl daemon-reload

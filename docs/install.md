@@ -53,6 +53,16 @@ Aucun Python ni `sudo` nécessaire sur le Pi.
 
 `rpi-monitor serve` collecte en continu, garde 48 h d'historique, expose l'API et l'interface Web, et survit à un redémarrage (sauvegarde périodique de l'historique). Il est lancé par systemd, sans session SSH.
 
+**Tout vit dans un seul dossier, `/opt/rpi-monitor/`** :
+
+| Fichier | Rôle |
+|---|---|
+| `rpi-monitor` | le binaire |
+| `password` | le mot de passe d'accès (droits 600) |
+| `history.json` | la sauvegarde de l'historique (créée par le service) |
+
+Par défaut, le service cherche `password` et écrit `history.json` dans le dossier de son exécutable : déplacer le dossier suffit à tout déplacer. Seule l'unité systemd est ailleurs (`/etc/systemd/system/rpi-monitor.service`).
+
 ### Installation
 
 ```sh
@@ -61,9 +71,11 @@ scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <util
 ssh -t <utilisateur>@<pi> sudo sh install-service.sh
 ```
 
-Le script copie le binaire dans `/usr/local/bin`, installe l'unité, demande le **mot de passe d'accès** (rangé dans `/etc/rpi-monitor/password`, droits 600) puis active et démarre le service. Au démarrage du Pi, le service se lance seul et redémarre en cas de panne (`Restart=always`).
+Le script crée l'utilisateur système `rpi-monitor` (groupe `video`, pour lire les capteurs), installe le binaire et l'unité, demande le **mot de passe d'accès** (écrit dans `/opt/rpi-monitor/password`, droits 600) puis active et démarre le service. Au démarrage du Pi, le service se lance seul et redémarre en cas de panne (`Restart=always`).
 
 Vérifier : `systemctl status rpi-monitor`, `journalctl -u rpi-monitor -f`, puis `curl http://127.0.0.1:8765/api/v1/health` depuis le Pi.
+
+Changer le mot de passe : éditer `/opt/rpi-monitor/password` (conserver les droits 600, propriétaire `rpi-monitor`), puis `sudo systemctl restart rpi-monitor`.
 
 ### Configuration
 
@@ -73,8 +85,8 @@ Ordre de priorité : défaut < variable d'environnement < option de la ligne de 
 |---|---|---|---|
 | Adresse d'écoute | `--host` | `RPI_MONITOR_HOST` | `127.0.0.1` |
 | Port | `--port` | `RPI_MONITOR_PORT` | `8765` |
-| Fichier du mot de passe | `--password-file` | `RPI_MONITOR_PASSWORD_FILE` | `$CREDENTIALS_DIRECTORY/password` (systemd) |
-| Dossier de sauvegarde | `--data-dir` | `RPI_MONITOR_DATA_DIR` | `$STATE_DIRECTORY` (systemd) |
+| Fichier du mot de passe | `--password-file` | `RPI_MONITOR_PASSWORD_FILE` | `password` dans le dossier de l'exécutable |
+| Dossier de sauvegarde | `--data-dir` | `RPI_MONITOR_DATA_DIR` | le dossier de l'exécutable |
 
 Changer le port sans toucher au code : `sudo systemctl edit rpi-monitor`, puis
 
@@ -95,10 +107,12 @@ Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel tr
 
 ### Mise à jour
 
+Relancer simplement le script d'installation avec le nouveau binaire : il arrête le service, remplace le binaire, conserve le mot de passe et l'historique, puis redémarre.
+
 ```sh
 scripts/build-pi.sh
-scp dist/rpi-monitor <utilisateur>@<pi>:~/
-ssh <utilisateur>@<pi> 'sudo systemctl stop rpi-monitor && sudo install -m 755 rpi-monitor /usr/local/bin/rpi-monitor && sudo systemctl start rpi-monitor'
+scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
+ssh -t <utilisateur>@<pi> sudo sh install-service.sh
 ```
 
 L'arrêt écrit une dernière sauvegarde : l'historique est conservé (le temps d'arrêt apparaît comme un trou dans les courbes).
@@ -107,11 +121,12 @@ L'arrêt écrit une dernière sauvegarde : l'historique est conservé (le temps 
 
 ```sh
 sudo systemctl disable --now rpi-monitor
-sudo rm /etc/systemd/system/rpi-monitor.service /usr/local/bin/rpi-monitor
-sudo rm -r /etc/rpi-monitor /var/lib/rpi-monitor   # mot de passe et historique
+sudo rm /etc/systemd/system/rpi-monitor.service
+sudo rm -r /opt/rpi-monitor        # binaire, mot de passe et historique
+sudo userdel rpi-monitor
 sudo systemctl daemon-reload
 ```
 
 ### Ressources
 
-Pas de base de données : l'historique de 48 h tient en mémoire (quelques Mo) et est sauvegardé dans un seul fichier JSON (`/var/lib/rpi-monitor/history.json`, environ 5 Mo) toutes les 10 minutes et à l'arrêt, soit une écriture disque par 10 minutes. Mesurer sur le Pi après installation : `systemctl status rpi-monitor` (mémoire), `top -p $(pidof rpi-monitor)` (CPU), `du -h /var/lib/rpi-monitor`.
+Pas de base de données : l'historique de 48 h tient en mémoire (quelques Mo) et est sauvegardé dans un seul fichier JSON (`/opt/rpi-monitor/history.json`, environ 5 Mo) toutes les 10 minutes et à l'arrêt, soit une écriture disque par 10 minutes. Mesurer sur le Pi après installation : `systemctl status rpi-monitor` (mémoire), `top -p $(pidof rpi-monitor)` (CPU), `du -h /opt/rpi-monitor`.

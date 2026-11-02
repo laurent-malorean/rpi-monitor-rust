@@ -25,7 +25,7 @@ Le collecteur ignore ses clients : fermer un navigateur, arrêter le serveur ou 
 
 - **Buffers TUI** (`history.rs`) : 30 min à 1 s, sans horodatage, vidables par `r`. Non modifiés.
 - **Archive** (`archive.rs`) : 48 h glissantes, périodes de 10 s (moyenne, min, max), horodatées. Une période sans mesure est absente (donnée indisponible), jamais 0. Le ventilateur et le throttling y valent 1 (actif) ou 0 par mesure, donc la moyenne d'une période est la fraction d'activité. Le `reset` de la TUI ne la touche pas.
-- **Sauvegarde** (`snapshot.rs`) : `history.json`, écrit de façon atomique (fichier temporaire + `rename`) toutes les 10 min et à l'arrêt, relu au démarrage. Une écriture qui échoue ou un fichier illisible n'arrête jamais la collecte ni le démarrage.
+- **Sauvegarde** (`snapshot.rs`) : `history.json` (dans le dossier de l'exécutable par défaut), écrit de façon atomique (fichier temporaire + `rename`) toutes les 10 min et à l'arrêt, relu au démarrage. Une écriture qui échoue ou un fichier illisible n'arrête jamais la collecte ni le démarrage.
 
 ## API (lecture seule, JSON, `/api/v1`)
 
@@ -42,7 +42,7 @@ Toute méthode autre que GET sur les données est refusée (405) : aucun client 
 
 ## Sécurité
 
-Le service écoute sur 127.0.0.1 par défaut ; un tunnel le publie. Derrière un tunnel, toutes les requêtes arrivent depuis 127.0.0.1 : filtrer par adresse source est inutile, d'où l'authentification applicative (mot de passe en fichier, cookie de session aléatoire HttpOnly / SameSite=Strict, 5 échecs par minute, en-têtes CSP et nosniff). Le démarrage est refusé sans mot de passe, sauf `--no-auth` explicite.
+Le service écoute sur 127.0.0.1 par défaut ; un tunnel le publie. Derrière un tunnel, toutes les requêtes arrivent depuis 127.0.0.1 : filtrer par adresse source est inutile, d'où l'authentification applicative (mot de passe en fichier, cookie de session aléatoire HttpOnly / SameSite=Strict, 5 échecs par minute, en-têtes CSP et nosniff). Le mot de passe est le fichier `password` à côté de l'exécutable (droits 600 exigés). Le démarrage est refusé s'il manque, sauf `--no-auth` explicite.
 
 ## Fiabilité
 

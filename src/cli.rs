@@ -32,11 +32,11 @@ Options communes :
 Options de serve (la CLI l'emporte sur l'environnement, qui l'emporte sur le défaut) :
   --host <ip>            adresse d'écoute (RPI_MONITOR_HOST, défaut 127.0.0.1)
   --port <n>             port d'écoute (RPI_MONITOR_PORT, défaut 8765)
-  --password-file <f>    fichier contenant le mot de passe (RPI_MONITOR_PASSWORD_FILE,
-                         ou $CREDENTIALS_DIRECTORY/password sous systemd)
+  --password-file <f>    fichier du mot de passe (RPI_MONITOR_PASSWORD_FILE ;
+                         défaut : « password » à côté de l'exécutable)
   --no-auth              pas de mot de passe (déconseillé : un tunnel rend le service public)
-  --data-dir <d>         dossier du snapshot de l'historique (RPI_MONITOR_DATA_DIR,
-                         ou $STATE_DIRECTORY sous systemd)
+  --data-dir <d>         dossier de la sauvegarde de l'historique (RPI_MONITOR_DATA_DIR ;
+                         défaut : le dossier de l'exécutable)
 
 Touches TUI : q quitter · p pause · r reset · w fenêtre 1/5/30 min";
 

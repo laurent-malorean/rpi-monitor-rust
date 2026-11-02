@@ -52,11 +52,11 @@ Collecte : ventilateur toutes les 500 ms, les autres mesures toutes les secondes
 
 ```sh
 cargo run -- serve --demo --no-auth       # essai sur Mac : http://127.0.0.1:8765
-rpi-monitor serve --port 9090 --password-file /etc/rpi-monitor/password
+rpi-monitor serve --port 9090      # lit « password » à côté de l'exécutable
 ```
 
 - Port et adresse réglables (`--port` / `RPI_MONITOR_PORT`, `--host` / `RPI_MONITOR_HOST`) ; l'écoute se fait par défaut sur `127.0.0.1`, un tunnel de votre choix permet l'accès à distance.
-- **Mot de passe obligatoire** (fichier, cookie de session) puisqu'un tunnel rend le service public.
+- **Mot de passe obligatoire** (fichier `password` à côté de l'exécutable, cookie de session) puisqu'un tunnel rend le service public. Tout le service (binaire, mot de passe, sauvegarde) tient dans un seul dossier, `/opt/rpi-monitor/`.
 - Lancé par systemd au démarrage du Pi, redémarré en cas de panne. Installation, mise à jour, désinstallation : [docs/install.md](docs/install.md). Conception : [docs/architecture.md](docs/architecture.md).
 - La TUI reste disponible telle quelle (`rpi-monitor` ou `rpi-monitor tui`), y compris par SSH.
 

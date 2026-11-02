@@ -42,7 +42,8 @@ fn make_sensors(demo: bool) -> Box<dyn Sensors> {
 
 /// Service permanent : tourne jusqu'à SIGINT/SIGTERM, journalise sur stderr (journald).
 fn serve(opts: ServeOptions) -> ExitCode {
-    let config = match config::resolve(opts, &|k| std::env::var(k).ok()) {
+    let base = std::env::current_exe().ok().and_then(|p| p.parent().map(std::path::Path::to_path_buf)).unwrap_or_else(|| ".".into());
+    let config = match config::resolve(opts, &|k| std::env::var(k).ok(), &base) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("configuration : {e}");
