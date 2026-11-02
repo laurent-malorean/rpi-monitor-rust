@@ -8,7 +8,14 @@ use crate::collector::History;
 use api::{Info, Response};
 use auth::{Auth, Login};
 use serde_json::json;
+use config::Config;
+use std::io::Read;
+use std::net::{SocketAddr, TcpListener};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tiny_http::{Header, Server};
 
 const INDEX_HTML: &str = include_str!("../../web/index.html");
 const STYLES_CSS: &str = include_str!("../../web/styles.css");
@@ -82,6 +89,111 @@ pub fn route(shared: &Shared, req: &Request, now: f64) -> Response {
         _ if !shared.auth.is_valid(token, now) => json_msg(401, json!({ "error": "authentification requise" })),
         _ => api::handle(req.method, req.url, &shared.history, &shared.info, now),
     }
+}
+
+const WORKERS: usize = 4;
+const POLL: Duration = Duration::from_millis(100);
+
+fn now_s() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
+}
+
+fn header(name: &str, value: &str) -> Option<Header> {
+    Header::from_bytes(name.as_bytes(), value.as_bytes()).ok()
+}
+
+fn request_header(request: &tiny_http::Request, name: &'static str) -> Option<String> {
+    request.headers().iter().find(|h| h.field.equiv(name)).map(|h| h.value.as_str().to_string())
+}
+
+fn serve_one(shared: &Shared, mut request: tiny_http::Request) {
+    let (cookie, forwarded) = (request_header(&request, "Cookie"), request_header(&request, "X-Forwarded-Proto"));
+    let mut body = Vec::new();
+    let _ = request.as_reader().take(MAX_BODY as u64 + 1).read_to_end(&mut body);
+    let method = request.method().as_str().to_string();
+    let url = request.url().to_string();
+    let https = forwarded.is_some_and(|f| f.eq_ignore_ascii_case("https"));
+    let r = route(shared, &Request { method: &method, url: &url, cookie: cookie.as_deref(), body: &body, https }, now_s());
+
+    let mut resp = tiny_http::Response::from_data(r.body).with_status_code(r.status);
+    let cache = if r.content_type.starts_with("application/") { "no-store" } else { "no-cache" };
+    let mut headers = vec![
+        header("Content-Type", r.content_type),
+        header("Cache-Control", cache),
+        header("X-Content-Type-Options", "nosniff"),
+        header("Referrer-Policy", "no-referrer"),
+        header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"),
+    ];
+    if let Some(c) = &r.set_cookie {
+        headers.push(header("Set-Cookie", c));
+    }
+    for h in headers.into_iter().flatten() {
+        resp.add_header(h);
+    }
+    let _ = request.respond(resp);
+}
+
+/// Serveur HTTP en fonctionnement ; arrêté par `stop`.
+pub struct Running {
+    addr: SocketAddr,
+    stop: Arc<AtomicBool>,
+    workers: Vec<JoinHandle<()>>,
+}
+
+impl Running {
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    pub fn stop(self) {
+        self.stop.store(true, Ordering::SeqCst);
+        for w in self.workers {
+            let _ = w.join();
+        }
+    }
+}
+
+fn bind_error(addr: SocketAddr, e: &std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::AddrInUse => {
+            format!("port {} déjà utilisé sur {} (un autre rpi-monitor ?) ; choisir un autre port avec --port", addr.port(), addr.ip())
+        }
+        std::io::ErrorKind::PermissionDenied => {
+            format!("port {} interdit sur {} : les ports < 1024 demandent des privilèges ; choisir un port plus élevé", addr.port(), addr.ip())
+        }
+        _ => format!("écoute impossible sur {addr} : {e}"),
+    }
+}
+
+/// Démarre le serveur. `password` : `None` désactive l'authentification.
+pub fn start(config: &Config, history: Arc<Mutex<History>>, password: Option<String>) -> Result<Running, String> {
+    let listener = TcpListener::bind(config.addr).map_err(|e| bind_error(config.addr, &e))?;
+    let addr = listener.local_addr().map_err(|e| e.to_string())?;
+    let server = Arc::new(Server::from_listener(listener, None).map_err(|e| format!("serveur HTTP : {e}"))?);
+    let shared = Arc::new(Shared {
+        history,
+        info: Info { demo: config.demo, started_at: now_s() },
+        auth: Auth::new(password),
+    });
+    let stop = Arc::new(AtomicBool::new(false));
+    let workers = (0..WORKERS)
+        .map(|i| {
+            let (server, shared, stop) = (server.clone(), shared.clone(), stop.clone());
+            std::thread::Builder::new()
+                .name(format!("http-{i}"))
+                .spawn(move || {
+                    while !stop.load(Ordering::SeqCst) {
+                        match server.recv_timeout(POLL) {
+                            Ok(Some(request)) => serve_one(&shared, request),
+                            Ok(None) => {}
+                            Err(_) => break,
+                        }
+                    }
+                })
+                .map_err(|e| e.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Running { addr, stop, workers })
 }
 
 #[cfg(test)]
