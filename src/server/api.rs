@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 const STEP_S: f64 = 10.0;
 const DEFAULT_PERIOD_S: f64 = 3600.0;
+const DEFAULT_MAX_POINTS: usize = 600;
 
 /// Contexte constant du service.
 pub struct Info {
@@ -65,6 +66,34 @@ fn period(q: &[(&str, &str)]) -> Result<f64, String> {
     }
 }
 
+fn max_points(q: &[(&str, &str)]) -> Result<usize, String> {
+    match param(q, "max_points") {
+        None => Ok(DEFAULT_MAX_POINTS),
+        Some(v) => match v.parse::<usize>() {
+            Ok(n) if (10..=5000).contains(&n) => Ok(n),
+            _ => Err(format!("max_points invalide : « {v} » ; attendu un entier de 10 à 5000")),
+        },
+    }
+}
+
+/// Regroupe les périodes de 10 s par pas multiples de 10 s (moyenne des moyennes, vrais min/max).
+fn resample(points: &[Point], step: f64) -> Vec<Point> {
+    let mut out: Vec<(Point, u32)> = vec![];
+    for p in points {
+        let ts = (p.ts / step).floor() * step;
+        match out.last_mut() {
+            Some((o, n)) if o.ts == ts => {
+                o.mean += p.mean;
+                o.min = o.min.min(p.min);
+                o.max = o.max.max(p.max);
+                *n += 1;
+            }
+            _ => out.push((Point { ts, ..*p }, 1)),
+        }
+    }
+    out.into_iter().map(|(p, n)| Point { mean: p.mean / n as f64, ..p }).collect()
+}
+
 fn keys(q: &[(&str, &str)]) -> Result<Vec<Key>, String> {
     match param(q, "key") {
         None => Ok(Key::ALL.to_vec()),
@@ -102,14 +131,15 @@ fn current(h: &History, info: &Info, now: f64) -> Value {
     json!({ "ts": now, "demo": info.demo, "metrics": metrics })
 }
 
-fn history(h: &History, ks: &[Key], period_s: f64, now: f64) -> Value {
+fn history(h: &History, ks: &[Key], period_s: f64, max_points: usize, now: f64) -> Value {
+    let step = ((period_s / max_points as f64 / STEP_S).ceil() * STEP_S).max(STEP_S);
     let mut series = Map::new();
     for &key in ks {
-        let pts: Vec<Value> =
-            h.archive_points(key, Some(now - period_s)).iter().map(|p| json!([p.ts, p.mean, p.min, p.max])).collect();
+        let raw = h.archive_points(key, Some(now - period_s));
+        let pts: Vec<Value> = resample(&raw, step).iter().map(|p| json!([p.ts, p.mean, p.min, p.max])).collect();
         series.insert(meta(key).0.into(), Value::Array(pts));
     }
-    json!({ "period_s": period_s, "step_s": STEP_S, "series": series })
+    json!({ "period_s": period_s, "step_s": step, "series": series })
 }
 
 fn stats(h: &History, ks: &[Key], period_s: f64, now: f64) -> Value {
@@ -153,8 +183,8 @@ pub fn handle(method: &str, url: &str, history_lock: &Mutex<History>, info: &Inf
             json_response(200, json!({ "status": "ok", "uptime_s": now - info.started_at, "demo": info.demo }))
         }
         "/api/v1/metrics/current" => json_response(200, current(&lock(history_lock), info, now)),
-        "/api/v1/metrics/history" => match parsed() {
-            Ok((ks, p)) => json_response(200, history(&lock(history_lock), &ks, p, now)),
+        "/api/v1/metrics/history" => match parsed().and_then(|(ks, p)| Ok((ks, p, max_points(&q)?))) {
+            Ok((ks, p, m)) => json_response(200, history(&lock(history_lock), &ks, p, m, now)),
             Err(e) => error(400, e),
         },
         "/api/v1/metrics/stats" => match parsed() {
@@ -310,5 +340,62 @@ mod tests {
             })
             .collect();
         assert!(threads.into_iter().all(|t| t.join().unwrap()));
+    }
+
+    fn long_history() -> Mutex<History> {
+        let mut h = History::new();
+        for t in (0..(24 * 3600)).step_by(10) {
+            // température : 40 °C avec un pic isolé de 90 °C ; trou de 2 h sans mesure
+            if (3600 * 10..3600 * 12).contains(&t) {
+                continue;
+            }
+            let v = if t == 3600 * 5 { 90.0 } else { 40.0 };
+            h.record_slow(t as f64, &Readings { temp: Some(v), ..Default::default() });
+        }
+        Mutex::new(h)
+    }
+
+    #[test]
+    fn long_periods_are_resampled_but_keep_peaks() {
+        let (s, v) = get(&long_history(), "/api/v1/metrics/history?key=temp&period=172800&max_points=300", 24.0 * 3600.0);
+        assert_eq!(s, 200);
+        let pts = v["series"]["temp"].as_array().unwrap();
+        assert!(pts.len() <= 300, "{}", pts.len());
+        let step = v["step_s"].as_f64().unwrap();
+        assert!(step > 10.0 && step % 10.0 == 0.0);
+        let max = pts.iter().map(|p| p[3].as_f64().unwrap()).fold(0.0, f64::max);
+        assert_eq!(max, 90.0, "le pic doit survivre au rééchantillonnage");
+    }
+
+    #[test]
+    fn resampling_does_not_fill_gaps_with_zeros() {
+        let (_, v) = get(&long_history(), "/api/v1/metrics/history?key=temp&period=172800&max_points=300", 24.0 * 3600.0);
+        let step = v["step_s"].as_f64().unwrap();
+        let pts = v["series"]["temp"].as_array().unwrap();
+        assert!(pts.iter().all(|p| p[1].as_f64().unwrap() > 0.0));
+        let biggest_gap = pts.windows(2).map(|w| w[1][0].as_f64().unwrap() - w[0][0].as_f64().unwrap()).fold(0.0, f64::max);
+        assert!(biggest_gap > 3600.0 * 1.5, "le trou doit rester visible ({biggest_gap}, pas {step})");
+    }
+
+    #[test]
+    fn short_periods_keep_the_native_10_second_resolution() {
+        let (_, v) = get(&long_history(), "/api/v1/metrics/history?key=temp&period=900", 24.0 * 3600.0);
+        assert_eq!(v["step_s"].as_f64(), Some(10.0));
+        assert!(v["series"]["temp"].as_array().unwrap().len() >= 89);
+    }
+
+    #[test]
+    fn max_points_is_validated() {
+        for bad in ["abc", "0", "5", "999999"] {
+            let (s, _) = get(&filled(), &format!("/api/v1/metrics/history?max_points={bad}"), 1030.0);
+            assert_eq!(s, 400, "{bad}");
+        }
+    }
+
+    #[test]
+    fn default_history_is_light_enough_for_polling() {
+        let (_, v) = get(&long_history(), "/api/v1/metrics/history?period=172800", 24.0 * 3600.0);
+        let total: usize = v["series"].as_object().unwrap().values().map(|a| a.as_array().unwrap().len()).sum();
+        assert!(total <= 7 * 600);
     }
 }
