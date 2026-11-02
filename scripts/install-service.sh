@@ -10,7 +10,7 @@ BIN=""
 for f in ./rpi-monitor ./dist/rpi-monitor; do [ -f "$f" ] && BIN="$f" && break; done
 UNIT=""
 for f in ./rpi-monitor.service ./deploy/rpi-monitor.service; do [ -f "$f" ] && UNIT="$f" && break; done
-[ -n "$BIN" ] && [ -n "$UNIT" ] || { echo "Binaire ou unité introuvable (voir docs/install.md)." >&2; exit 1; }
+[ -n "$BIN" ] && [ -n "$UNIT" ] || { echo "Binaire ou unité introuvable (voir docs/deploy-linux.md)." >&2; exit 1; }
 
 id rpi-monitor >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin --groups video rpi-monitor
 install -d -m 750 -o rpi-monitor -g rpi-monitor "$DIR"
