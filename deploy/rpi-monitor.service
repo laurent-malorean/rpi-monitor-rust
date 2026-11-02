@@ -1,0 +1,34 @@
+[Unit]
+Description=rpi-monitor : surveillance du Raspberry Pi (collecte, API et interface Web)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rpi-monitor serve
+# Port et adresse : surchargeables sans toucher au code (systemctl edit rpi-monitor).
+# Par défaut le service n'écoute que sur 127.0.0.1 ; un tunnel (Tailscale, Cloudflare...) le publie.
+Environment=RPI_MONITOR_PORT=8765
+Environment=RPI_MONITOR_HOST=127.0.0.1
+# Mot de passe fourni par systemd ($CREDENTIALS_DIRECTORY/password), jamais dans l'unité.
+LoadCredential=password:/etc/rpi-monitor/password
+# Sauvegarde de l'historique : /var/lib/rpi-monitor ($STATE_DIRECTORY).
+StateDirectory=rpi-monitor
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+
+# Durcissement : lecture seule du système, aucun privilège.
+DynamicUser=yes
+SupplementaryGroups=video
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
