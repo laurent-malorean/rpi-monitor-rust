@@ -67,3 +67,11 @@ fn build_script_puts_everything_to_copy_in_dist() {
     assert!(s.contains("deploy/rpi-monitor.service") && s.contains("scripts/install-service.sh"), "dist/ doit contenir l'unité et le script d'installation");
     assert!(s.contains("dist/rpi-monitor"));
 }
+
+#[test]
+fn install_script_refuses_a_binary_without_the_serve_command() {
+    let s = read("scripts/install-service.sh");
+    assert!(s.contains("--help") && s.contains("serve"), "le script doit vérifier que le binaire connaît `serve`");
+    let check = s.find("--help").unwrap();
+    assert!(check < s.find("install -m 755").unwrap(), "vérifier avant d'installer");
+}
