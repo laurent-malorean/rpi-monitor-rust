@@ -43,7 +43,7 @@ Le script vise la glibc 2.36 (Raspberry Pi OS Bookworm), compile dans un cache h
 ## 4. Déploiement de la TUI autonome
 
 ```sh
-# copier dist/rpi-monitor sur le Pi (FileZilla / SFTP), puis sur le Pi :
+# copier dist/rpi-monitor sur le Pi (client SFTP, scp...), puis sur le Pi :
 ./rpi-monitor
 ```
 

@@ -76,7 +76,7 @@ Le développement se fait sur Mac (Apple Silicon) et le binaire est compilé pou
 scripts/build-pi.sh        # produit dist/rpi-monitor (aussi recompilé à chaque commit)
 ```
 
-Puis copier `dist/rpi-monitor` sur le Pi (par exemple avec FileZilla).
+Puis copier `dist/rpi-monitor` sur le Pi avec l'outil de votre choix (client SFTP, `scp`...).
 
 Le résultat est un binaire Linux ARM64 autonome d'environ 700 Ko (glibc 2.36, Raspberry Pi OS Bookworm). Ni Python ni `sudo` ne sont nécessaires sur le Pi.
 

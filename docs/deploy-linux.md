@@ -2,7 +2,7 @@
 
 `rpi-monitor serve` collecte en continu, garde 48 h d'historique, expose l'API et l'interface Web, et survit à un redémarrage (sauvegarde périodique de l'historique). Il est lancé par systemd, sans session SSH.
 
-La compilation du binaire (`scripts/build-pi.sh`) depuis le Mac est décrite dans [install.md](install.md).
+La compilation du binaire (`scripts/build-pi.sh`) depuis le poste de développement est décrite dans [install.md](install.md).
 
 **Tout vit dans un seul dossier, `/opt/rpi-monitor/`** :
 
@@ -16,13 +16,13 @@ Par défaut, le service cherche `password` et écrit `history.json` dans le doss
 
 ### Installation
 
-**1. Sur le Mac** : le binaire `dist/rpi-monitor` est recompilé automatiquement à chaque commit (hook `post-commit`) ; sinon `scripts/build-pi.sh`. Copier ces trois fichiers du Mac vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`), avec FileZilla (SFTP) :
+**1. Sur votre ordinateur** : obtenir le binaire `dist/rpi-monitor` (recompilé automatiquement à chaque commit par le hook `post-commit`, sinon `scripts/build-pi.sh`). Copier ces trois fichiers vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`) avec l'outil de transfert de votre choix : client SFTP graphique (FileZilla, WinSCP, Cyberduck…) ou `scp` en ligne de commande :
 
 - `dist/rpi-monitor` : le binaire
 - `deploy/rpi-monitor.service` : l'unité systemd
 - `scripts/install-service.sh` : le script d'installation
 
-**2. Sur le Pi** (en SSH) : lancer l'installation.
+**2. Sur le Pi** (en SSH ou au clavier) : lancer l'installation.
 
 ```sh
 sudo sh install-service.sh
@@ -64,11 +64,7 @@ Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel tr
 
 ### Mise à jour
 
-**1. Sur le Mac** : le binaire est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier ces trois fichiers du Mac vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`), avec FileZilla (SFTP) :
-
-- `dist/rpi-monitor` : le binaire
-- `deploy/rpi-monitor.service` : l'unité systemd
-- `scripts/install-service.sh` : le script d'installation
+**1. Sur votre ordinateur** : le binaire est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier les trois mêmes fichiers (`dist/rpi-monitor`, `deploy/rpi-monitor.service`, `scripts/install-service.sh`) vers le dossier personnel du Pi, avec le même outil de transfert.
 
 **2. Sur le Pi** : relancer le script, qui arrête le service, remplace le binaire, conserve le mot de passe et l'historique, puis redémarre.
 
