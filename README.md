@@ -30,7 +30,7 @@ Sept indicateurs empilés. Pour chacun : la valeur actuelle en gros à gauche (a
 
 Une mesure absente est affichée `--` et n'est jamais comptée comme zéro.
 
-Collecte : ventilateur toutes les 500 ms, les autres mesures toutes les secondes. Historique conservé : 30 minutes. Affichage rafraîchi toutes les secondes.
+Collecte : ventilateur toutes les 500 ms, les autres mesures toutes les secondes. Historique de la TUI : 30 minutes. Historique du service : 48 heures glissantes. Affichage rafraîchi toutes les secondes.
 
 ### Touches
 
@@ -45,6 +45,20 @@ Collecte : ventilateur toutes les 500 ms, les autres mesures toutes les secondes
 
 - **Capteurs réels** : sur le Raspberry Pi (Linux).
 - **Mode démo** : données synthétiques cohérentes (charge qui varie, température progressive, déclenchement du ventilateur, événements de throttling). Il permet de tester toute l'interface sans Raspberry Pi, par exemple sur Mac. Il est **activé automatiquement hors Linux**.
+
+## Service permanent et interface Web
+
+`rpi-monitor serve` fait tourner la collecte 24 h/24 sans terminal, garde 48 h d'historique (sauvegardé, donc conservé après un redémarrage) et sert une **interface Web** consultable depuis un ordinateur, une tablette ou un téléphone : les 7 indicateurs, courbes de 15 min à 48 h, min / moyenne / max, événements du ventilateur et du throttling, actualisation chaque seconde, et indication de la perte de connexion.
+
+```sh
+cargo run -- serve --demo --no-auth       # essai sur Mac : http://127.0.0.1:8765
+rpi-monitor serve --port 9090 --password-file /etc/rpi-monitor/password
+```
+
+- Port et adresse réglables (`--port` / `RPI_MONITOR_PORT`, `--host` / `RPI_MONITOR_HOST`) ; l'écoute se fait par défaut sur `127.0.0.1`, un tunnel de votre choix permet l'accès à distance.
+- **Mot de passe obligatoire** (fichier, cookie de session) puisqu'un tunnel rend le service public.
+- Lancé par systemd au démarrage du Pi, redémarré en cas de panne. Installation, mise à jour, désinstallation : [docs/install.md](docs/install.md). Conception : [docs/architecture.md](docs/architecture.md).
+- La TUI reste disponible telle quelle (`rpi-monitor` ou `rpi-monitor tui`), y compris par SSH.
 
 ## Lancement
 
@@ -75,18 +89,22 @@ Le résultat est un binaire Linux ARM64 autonome d'environ 700 Ko (glibc 2.36, R
 - `src/render.rs` : fonctions de tracé pures (courbes braille, blocs, échelle, rééchantillonnage, gros chiffres).
 - `src/app.rs` : état (pause, fenêtre, reset, touches) et mise en forme des indicateurs.
 - `src/ui.rs` : dessin avec ratatui. `src/main.rs` et `src/cli.rs` : point d'entrée.
+- `src/archive.rs` : historique long (48 h, horodaté). `src/snapshot.rs` : sauvegarde et restauration.
+- `src/server/` : configuration, API JSON (`api.rs`), authentification (`auth.rs`), serveur HTTP. `src/service.rs` : cycle de vie du service. `web/` : interface Web (HTML, CSS, JS, embarquée dans le binaire). `deploy/` : unité systemd.
 
 Pour ajouter une métrique : une méthode dans `Sensors`, une série dans `History`, un `Spec` dans `app.rs`.
 
 ## État du projet
 
-- 68 tests automatiques, qui ne nécessitent aucun Raspberry Pi (les lectures `/sys` et `/proc` sont testées sur des arbres de fichiers simulés).
+- 173 tests automatiques, qui ne nécessitent aucun Raspberry Pi (les lectures `/sys` et `/proc` sont testées sur des arbres de fichiers simulés ; le serveur est testé avec de vraies sockets sur un port éphémère ; la logique de l'interface Web est testée avec Node si présent).
 - Le mode démo a été vérifié dans un vrai terminal sur Mac, et la compilation croisée pour le Pi fonctionne.
-- **À valider** : l'exécution sur un vrai Raspberry Pi 5 (chemins sysfs, `vcgencmd`), et la comparaison de performances avec la version Python (mémoire, CPU, démarrage).
+- Le service et l'interface Web ont été vérifiés sur Mac en mode démo (navigateur ordinateur et téléphone, perte de connexion, arrêt par SIGTERM).
+- **À valider** : l'exécution sur un vrai Raspberry Pi 5 (dont le service systemd, la consommation CPU / RAM / disque mesurée) (chemins sysfs, `vcgencmd`), et la comparaison de performances avec la version Python (mémoire, CPU, démarrage).
 
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) : méthode de développement et conventions.
 - [docs/ontology.md](docs/ontology.md) : le vocabulaire métier.
 - [docs/kb_dev.md](docs/kb_dev.md) : les bonnes pratiques relevées au fil du développement.
-- [docs/install.md](docs/install.md) : installation et déploiement.
+- [docs/install.md](docs/install.md) : installation et déploiement (dont le service systemd).
+- [docs/architecture.md](docs/architecture.md) : architecture du moteur, de l'API et de la sécurité.

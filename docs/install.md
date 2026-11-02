@@ -40,7 +40,7 @@ scripts/build-pi.sh
 
 Le script vise la glibc 2.36 (Raspberry Pi OS Bookworm), compile dans un cache hors du projet (`~/.cache/rpi-monitor-target`) et ne laisse que `dist/rpi-monitor`, le seul fichier à copier sur le Pi.
 
-## 4. Déploiement
+## 4. Déploiement de la TUI autonome
 
 ```sh
 scp dist/rpi-monitor <utilisateur>@<pi>:~/
@@ -48,3 +48,70 @@ ssh <utilisateur>@<pi> ./rpi-monitor
 ```
 
 Aucun Python ni `sudo` nécessaire sur le Pi.
+
+## 5. Service permanent (collecte 24 h/24 + interface Web)
+
+`rpi-monitor serve` collecte en continu, garde 48 h d'historique, expose l'API et l'interface Web, et survit à un redémarrage (sauvegarde périodique de l'historique). Il est lancé par systemd, sans session SSH.
+
+### Installation
+
+```sh
+scripts/build-pi.sh
+scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
+ssh -t <utilisateur>@<pi> sudo sh install-service.sh
+```
+
+Le script copie le binaire dans `/usr/local/bin`, installe l'unité, demande le **mot de passe d'accès** (rangé dans `/etc/rpi-monitor/password`, droits 600) puis active et démarre le service. Au démarrage du Pi, le service se lance seul et redémarre en cas de panne (`Restart=always`).
+
+Vérifier : `systemctl status rpi-monitor`, `journalctl -u rpi-monitor -f`, puis `curl http://127.0.0.1:8765/api/v1/health` depuis le Pi.
+
+### Configuration
+
+Ordre de priorité : défaut < variable d'environnement < option de la ligne de commande.
+
+| Réglage | Option | Variable | Défaut |
+|---|---|---|---|
+| Adresse d'écoute | `--host` | `RPI_MONITOR_HOST` | `127.0.0.1` |
+| Port | `--port` | `RPI_MONITOR_PORT` | `8765` |
+| Fichier du mot de passe | `--password-file` | `RPI_MONITOR_PASSWORD_FILE` | `$CREDENTIALS_DIRECTORY/password` (systemd) |
+| Dossier de sauvegarde | `--data-dir` | `RPI_MONITOR_DATA_DIR` | `$STATE_DIRECTORY` (systemd) |
+
+Changer le port sans toucher au code : `sudo systemctl edit rpi-monitor`, puis
+
+```ini
+[Service]
+Environment=RPI_MONITOR_PORT=9090
+```
+
+et `sudo systemctl restart rpi-monitor`. Un port invalide ou déjà occupé donne un message explicite dans `journalctl`.
+
+### Accès hors du réseau local
+
+Le service n'écoute que sur `127.0.0.1` : rien n'est ouvert sur le réseau. Pour le consulter à distance, publier ce port local avec un **tunnel de votre choix** (Tailscale Funnel, Cloudflare Tunnel, etc.). Le service est indépendant du tunnel choisi.
+
+Un tunnel rend le service public : c'est pourquoi **un mot de passe est obligatoire** (`--no-auth` existe pour les tests, à ne jamais utiliser derrière un tunnel). Le mot de passe donne un cookie de session valable 30 jours ; 5 échecs par minute bloquent les tentatives. Les sessions sont en mémoire : un redémarrage du service oblige à se reconnecter. Choisir un mot de passe long (16 caractères ou plus).
+
+Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel transmet `X-Forwarded-Proto: https`.
+
+### Mise à jour
+
+```sh
+scripts/build-pi.sh
+scp dist/rpi-monitor <utilisateur>@<pi>:~/
+ssh <utilisateur>@<pi> 'sudo systemctl stop rpi-monitor && sudo install -m 755 rpi-monitor /usr/local/bin/rpi-monitor && sudo systemctl start rpi-monitor'
+```
+
+L'arrêt écrit une dernière sauvegarde : l'historique est conservé (le temps d'arrêt apparaît comme un trou dans les courbes).
+
+### Désinstallation
+
+```sh
+sudo systemctl disable --now rpi-monitor
+sudo rm /etc/systemd/system/rpi-monitor.service /usr/local/bin/rpi-monitor
+sudo rm -r /etc/rpi-monitor /var/lib/rpi-monitor   # mot de passe et historique
+sudo systemctl daemon-reload
+```
+
+### Ressources
+
+Pas de base de données : l'historique de 48 h tient en mémoire (quelques Mo) et est sauvegardé dans un seul fichier JSON (`/var/lib/rpi-monitor/history.json`, environ 5 Mo) toutes les 10 minutes et à l'arrêt, soit une écriture disque par 10 minutes. Mesurer sur le Pi après installation : `systemctl status rpi-monitor` (mémoire), `top -p $(pidof rpi-monitor)` (CPU), `du -h /var/lib/rpi-monitor`.

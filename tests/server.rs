@@ -114,3 +114,22 @@ fn stop_is_prompt_and_frees_the_port() {
     assert!(t.elapsed() < Duration::from_secs(2), "arrêt trop lent : {:?}", t.elapsed());
     TcpListener::bind(addr).expect("le port doit être libéré");
 }
+
+#[test]
+fn clients_that_never_send_their_announced_body_cannot_freeze_the_server() {
+    let m = Monitor::start(Box::new(DemoSensors::new(1)));
+    let srv = start(&m, None);
+    let stalled: Vec<TcpStream> = (0..12)
+        .map(|_| {
+            let mut s = TcpStream::connect(srv.addr()).unwrap();
+            write!(s, "POST /api/v1/login HTTP/1.1\r\nHost: x\r\nContent-Length: 50\r\n\r\n").unwrap(); // corps jamais envoyé
+            s
+        })
+        .collect();
+    std::thread::sleep(Duration::from_millis(300));
+    let t = Instant::now();
+    assert_eq!(http(srv.addr(), "GET", "/api/v1/health", &[], "").0, 200);
+    assert!(t.elapsed() < Duration::from_secs(3), "serveur bloqué : {:?}", t.elapsed());
+    drop(stalled);
+    srv.stop();
+}

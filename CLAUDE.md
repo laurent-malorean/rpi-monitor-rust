@@ -36,7 +36,8 @@ Quand l'utilisateur demande de commiter :
 ## Dépendances et environnement
 
 - Gestion avec **cargo** (`Cargo.toml` + `Cargo.lock`, versionné car c'est un binaire). Peu de dépendances, de préférence en Rust pur (cross-compilation Pi sans toolchain C) : `ratatui` seul pour l'UI.
-- Commandes usuelles : `cargo build`, `cargo test` (tests), `cargo run -- --demo` (données synthétiques, automatique hors Linux), `cargo run` (capteurs réels, sur le Pi), `cargo clippy`.
+- Commandes usuelles : `cargo build`, `cargo test` (tests), `cargo run -- --demo` (TUI, données synthétiques, automatique hors Linux), `cargo run` (capteurs réels, sur le Pi), `cargo run -- serve --demo --no-auth` (service + interface Web sur http://127.0.0.1:8765), `cargo clippy`.
+- Dépendances ajoutées pour le service : `tiny_http`, `serde_json`, `ctrlc` (Rust pur). Interface Web dans `web/` (sans framework ni CDN) ; Node n'est utilisé que pour ses tests (`web/app.test.js`). Conception : `docs/architecture.md`.
 - Build Pi : `scripts/build-pi.sh` (cible `aarch64-unknown-linux-gnu` via `cargo-zigbuild`, résultat dans `dist/rpi-monitor`). Voir `docs/install.md`.
 
 ## Hook pre-commit
