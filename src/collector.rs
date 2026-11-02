@@ -31,6 +31,19 @@ pub enum Key {
 impl Key {
     pub const ALL: [Key; 7] = [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp, Key::Fan, Key::Throttle];
 
+    /// Identifiant stable (API, fichier de sauvegarde).
+    pub fn id(self) -> &'static str {
+        match self {
+            Key::Cpu => "cpu",
+            Key::Freq => "freq",
+            Key::Power => "power",
+            Key::Ram => "ram",
+            Key::Temp => "temp",
+            Key::Fan => "fan",
+            Key::Throttle => "throttle",
+        }
+    }
+
     fn index(self) -> usize {
         Key::ALL.iter().position(|&k| k == self).unwrap_or(0)
     }
@@ -122,6 +135,17 @@ impl History {
     /// Historique long (48 h) d'un indicateur, à partir de `since` (s, epoch).
     pub fn archive_points(&self, key: Key, since: Option<f64>) -> Vec<Point> {
         self.archive[key.index()].points(since)
+    }
+
+    /// Périodes terminées de chaque indicateur, pour la sauvegarde.
+    pub fn archive_export(&self) -> Vec<(Key, Vec<Point>)> {
+        Key::ALL.into_iter().map(|k| (k, self.archive[k.index()].completed())).collect()
+    }
+
+    pub fn archive_import(&mut self, data: Vec<(Key, Vec<Point>)>) {
+        for (key, points) in data {
+            self.archive[key.index()].restore(points);
+        }
     }
 
     pub fn archive_stats(&self, key: Key, since: Option<f64>) -> Option<Stats> {

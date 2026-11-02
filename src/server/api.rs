@@ -32,13 +32,13 @@ fn error(status: u16, msg: impl Into<String>) -> Response {
 /// (identifiant JSON, libellé, unité)
 fn meta(key: Key) -> (&'static str, &'static str, &'static str) {
     match key {
-        Key::Cpu => ("cpu", "CPU", "%"),
-        Key::Freq => ("freq", "Fréquence", "MHz"),
-        Key::Power => ("power", "Consommation", "W"),
-        Key::Ram => ("ram", "RAM", "%"),
-        Key::Temp => ("temp", "Température", "°C"),
-        Key::Fan => ("fan", "Ventilateur", ""),
-        Key::Throttle => ("throttle", "Throttling", ""),
+        Key::Cpu => (key.id(), "CPU", "%"),
+        Key::Freq => (key.id(), "Fréquence", "MHz"),
+        Key::Power => (key.id(), "Consommation", "W"),
+        Key::Ram => (key.id(), "RAM", "%"),
+        Key::Temp => (key.id(), "Température", "°C"),
+        Key::Fan => (key.id(), "Ventilateur", ""),
+        Key::Throttle => (key.id(), "Throttling", ""),
     }
 }
 

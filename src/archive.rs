@@ -64,6 +64,22 @@ impl Series {
         }
     }
 
+    /// Périodes terminées uniquement (la période en cours n'est pas figée).
+    pub fn completed(&self) -> Vec<Point> {
+        self.done.iter().copied().collect()
+    }
+
+    /// Recharge des périodes sauvegardées ; les points hors ordre ou non finis sont ignorés.
+    pub fn restore(&mut self, points: Vec<Point>) {
+        self.done.clear();
+        for p in points {
+            let finite = [p.ts, p.mean, p.min, p.max].iter().all(|v| v.is_finite());
+            if finite && self.done.back().is_none_or(|last| p.ts > last.ts) {
+                self.done.push_back(p);
+            }
+        }
+    }
+
     /// Périodes terminées + période en cours, à partir de `since` (inclus).
     pub fn points(&self, since: Option<f64>) -> Vec<Point> {
         let current = self.open.as_ref().filter(|o| o.count > 0).map(|o| Point {
@@ -158,5 +174,28 @@ mod tests {
         let st = s.stats(Some(110.0)).unwrap();
         assert_eq!((st.minimum, st.maximum, st.mean), (30.0, 50.0, 40.0));
         assert!(Series::new(10.0, 100.0).stats(None).is_none());
+    }
+
+    #[test]
+    fn completed_excludes_the_open_period_and_restore_brings_points_back() {
+        let mut s = series();
+        s.add(100.0, Some(1.0));
+        s.add(110.0, Some(2.0));
+        let done = s.completed();
+        assert_eq!(done.iter().map(|p| p.ts).collect::<Vec<_>>(), [100.0]);
+        let mut r = series();
+        r.restore(done);
+        r.add(130.0, Some(3.0));
+        assert_eq!(r.points(None).iter().map(|p| p.ts).collect::<Vec<_>>(), [100.0, 130.0]);
+    }
+
+    #[test]
+    fn restore_ignores_unordered_or_non_finite_points_and_old_ones_expire() {
+        let p = |ts: f64, mean: f64| Point { ts, mean, min: mean, max: mean };
+        let mut s = series(); // rétention 100 s
+        s.restore(vec![p(50.0, 1.0), p(40.0, 2.0), p(60.0, f64::NAN), p(70.0, 3.0)]);
+        assert_eq!(s.points(None).iter().map(|x| x.ts).collect::<Vec<_>>(), [50.0, 70.0]);
+        s.add(500.0, Some(9.0));
+        assert_eq!(s.points(None).len(), 1);
     }
 }
