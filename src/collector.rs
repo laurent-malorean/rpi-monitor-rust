@@ -1,6 +1,7 @@
 //! Thread de collecte + historiques. Indépendant de l'affichage.
 //! (Les capteurs eux-mêmes sont dans `sensors/` ; ici : planification et stockage.)
 
+use crate::archive::{Point, Series};
 use crate::history::{BucketSeries, RingBuffer, Stats};
 use crate::sensors::{parse_throttled, FanReading, Sensors, Throttle};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -13,6 +14,8 @@ pub const HISTORY_S: usize = 30 * 60;
 const BUCKET_S: f64 = 10.0;
 const FAST: Duration = Duration::from_millis(500); // ventilateur
 const SLOW_EVERY: u32 = 2; // autres métriques : 1 s
+pub const ARCHIVE_S: f64 = 48.0 * 3600.0; // historique long
+const ARCHIVE_STEP_S: f64 = 10.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
@@ -23,6 +26,14 @@ pub enum Key {
     Temp,
     Fan,
     Throttle,
+}
+
+impl Key {
+    pub const ALL: [Key; 7] = [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp, Key::Fan, Key::Throttle];
+
+    fn index(self) -> usize {
+        Key::ALL.iter().position(|&k| k == self).unwrap_or(0)
+    }
 }
 
 /// Copie des données d'un indicateur, prise sous verrou.
@@ -51,6 +62,7 @@ pub struct History {
     throttle: BucketSeries,
     fan_last: Option<FanReading>,
     throttle_last: Option<Throttle>,
+    archive: [Series; 7], // 48 h horodatées, indexées comme `Key::ALL`
 }
 
 fn ring_index(key: Key) -> Option<usize> {
@@ -72,11 +84,14 @@ impl History {
             throttle: BucketSeries::new(BUCKET_S, HISTORY_S / BUCKET_S as usize),
             fan_last: None,
             throttle_last: None,
+            archive: std::array::from_fn(|_| Series::new(ARCHIVE_STEP_S, ARCHIVE_S)),
         }
     }
 
     pub fn record_fast(&mut self, ts: f64, fan: Option<FanReading>) {
-        self.fan.add(ts, fan.and_then(|f| f.active()));
+        let active = fan.and_then(|f| f.active());
+        self.fan.add(ts, active);
+        self.archive[Key::Fan.index()].add(ts, active.map(f64::from));
         self.fan_last = fan;
     }
 
@@ -84,7 +99,12 @@ impl History {
         for (ring, v) in self.rings.iter_mut().zip([r.cpu, r.freq, r.power, r.ram, r.temp]) {
             ring.add(v);
         }
-        self.throttle.add(ts, r.throttle.as_ref().map(Throttle::active));
+        for (key, v) in [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp].into_iter().zip([r.cpu, r.freq, r.power, r.ram, r.temp]) {
+            self.archive[key.index()].add(ts, v);
+        }
+        let throttling = r.throttle.as_ref().map(Throttle::active);
+        self.throttle.add(ts, throttling);
+        self.archive[Key::Throttle.index()].add(ts, throttling.map(f64::from));
         self.throttle_last = r.throttle.clone();
     }
 
@@ -97,6 +117,15 @@ impl History {
             (None, Key::Fan) => bucket_snapshot(&self.fan),
             _ => bucket_snapshot(&self.throttle),
         }
+    }
+
+    /// Historique long (48 h) d'un indicateur, à partir de `since` (s, epoch).
+    pub fn archive_points(&self, key: Key, since: Option<f64>) -> Vec<Point> {
+        self.archive[key.index()].points(since)
+    }
+
+    pub fn archive_stats(&self, key: Key, since: Option<f64>) -> Option<Stats> {
+        self.archive[key.index()].stats(since)
     }
 
     pub fn fan_last(&self) -> Option<FanReading> {
@@ -268,6 +297,41 @@ mod tests {
         for k in [Key::Cpu, Key::Fan, Key::Throttle] {
             assert!(h.snapshot(k).values.is_empty());
         }
+    }
+
+
+    #[test]
+    fn archive_receives_slow_and_fast_readings_with_timestamps() {
+        let mut h = History::new();
+        h.record_slow(100.0, &Readings { cpu: Some(12.0), ..Default::default() });
+        let p = h.archive_points(Key::Cpu, None);
+        assert_eq!((p[0].ts, p[0].mean), (100.0, 12.0));
+        assert!(h.archive_points(Key::Ram, None).is_empty()); // indisponible : pas de point
+        let fan = |on| Some(FanReading { state: Some(on), pwm: None, rpm: None });
+        h.record_fast(100.0, fan(1));
+        h.record_fast(100.5, fan(0));
+        assert_eq!(h.archive_points(Key::Fan, None)[0].mean, 0.5);
+        h.record_slow(101.0, &slow(None, Some(crate::sensors::parse_throttled(0x4))));
+        assert_eq!(h.archive_points(Key::Throttle, None)[0].mean, 1.0);
+    }
+
+    #[test]
+    fn reset_does_not_touch_the_archive() {
+        let mut h = History::new();
+        h.record_slow(100.0, &slow(Some(1.0), None));
+        h.reset();
+        assert_eq!(h.archive_points(Key::Cpu, None).len(), 1);
+        assert!(h.snapshot(Key::Cpu).values.is_empty());
+    }
+
+    #[test]
+    fn archive_keeps_48_hours() {
+        let mut h = History::new();
+        h.record_slow(0.0, &slow(Some(1.0), None));
+        h.record_slow(49.0 * 3600.0, &slow(Some(2.0), None));
+        let p = h.archive_points(Key::Cpu, None);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].mean, 2.0);
     }
 
     struct Fake;
