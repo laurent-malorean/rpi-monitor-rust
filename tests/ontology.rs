@@ -4,6 +4,11 @@
 use std::fs;
 use std::path::Path;
 
+/// Fichier de code cité (Rust ou interface Web), par opposition à un symbole.
+fn is_file_ref(r: &str) -> bool {
+    r.starts_with("src/") || r.starts_with("web/")
+}
+
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
@@ -33,7 +38,7 @@ fn ontology_lists_the_business_terms() {
 #[test]
 fn every_file_cited_in_the_ontology_exists() {
     for (term, refs) in rows() {
-        let files: Vec<&String> = refs.iter().filter(|r| r.starts_with("src/")).collect();
+        let files: Vec<&String> = refs.iter().filter(|r| is_file_ref(r)).collect();
         assert!(!files.is_empty(), "« {term} » ne cite aucun fichier");
         for f in files {
             assert!(root().join(f).is_file(), "« {term} » cite {f}, qui n'existe pas");
@@ -46,10 +51,10 @@ fn every_symbol_cited_in_the_ontology_exists_in_the_cited_files() {
     for (term, refs) in rows() {
         let sources: String = refs
             .iter()
-            .filter(|r| r.starts_with("src/"))
+            .filter(|r| is_file_ref(r))
             .filter_map(|f| fs::read_to_string(root().join(f)).ok())
             .collect();
-        for sym in refs.iter().filter(|r| !r.starts_with("src/")) {
+        for sym in refs.iter().filter(|r| !is_file_ref(r)) {
             let name = sym.rsplit("::").next().unwrap_or(sym);
             assert!(sources.contains(name), "« {term} » cite {sym}, introuvable dans ses fichiers");
         }

@@ -1,2 +1,33 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>rpi-monitor</title></head><body><div id="app"></div><script src="/app.js"></script></body></html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RPi Monitor">
+<meta name="theme-color" content="#1d4ed8">
+<title>RPi Monitor</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="bar">
+  <h1>RPi Monitor <span id="demo" class="badge" hidden>démo</span></h1>
+  <div id="status" class="status" role="status"><span class="dot"></span><span id="status-text">Connexion…</span></div>
+  <nav id="periods" class="periods" aria-label="Période affichée"></nav>
+  <button id="logout" class="link" hidden>Déconnexion</button>
+</header>
+<div id="banner" class="banner" role="alert" hidden></div>
+<main id="app"></main>
+<section id="login" class="login" hidden>
+  <form id="login-form" autocomplete="on">
+    <h2>Accès protégé</h2>
+    <label for="password">Mot de passe</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Se connecter</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</section>
+<script src="/app.js"></script>
+</body>
+</html>
