@@ -1,92 +1,76 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1100" width="1100" height="1100" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif">
-<defs>
-<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
-</defs>
-<rect width="1100" height="1100" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 830" width="1100" height="830" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
+<rect width="1100" height="830" fill="#ffffff"/>
 <text x="10" y="28" font-size="22" font-weight="700" fill="#0f172a">rpi-monitor-rust — architecture</text>
-<rect x="10" y="50" width="1080" height="126" rx="14" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
-<text x="30" y="78" font-size="16" font-weight="700" fill="#0f172a">Terminal</text>
-<rect x="26" y="88" width="340" height="76" rx="9" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
-<text x="40" y="112" font-size="14" font-weight="700" fill="#0f172a">Clavier (crossterm)</text>
-<text x="40" y="134" font-size="12.5" fill="#1e293b">q quitter · p pause · r reset · w fenêtre</text>
-<text x="40" y="152" font-size="12.5" fill="#1e293b">Ctrl+C quitte aussi</text>
-<rect x="380" y="88" width="340" height="76" rx="9" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
-<text x="394" y="112" font-size="14" font-weight="700" fill="#0f172a">Écran (ratatui)</text>
-<text x="394" y="134" font-size="12.5" fill="#1e293b">En-tête, 7 indicateurs empilés, pied de page</text>
-<text x="394" y="152" font-size="12.5" fill="#1e293b">courbes braille · histogrammes en blocs</text>
-<rect x="734" y="88" width="340" height="76" rx="9" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
-<text x="748" y="112" font-size="14" font-weight="700" fill="#0f172a">Ligne de commande</text>
-<text x="748" y="134" font-size="12.5" fill="#1e293b">--demo · -h / --help</text>
-<text x="748" y="152" font-size="12.5" fill="#1e293b">démo automatique hors Linux (Mac)</text>
-<line x1="550" y1="176" x2="550" y2="206" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="10" y="206" width="1080" height="108" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
-<text x="30" y="234" font-size="16" font-weight="700" fill="#0f172a">Point d'entrée — main.rs, cli.rs  (thread principal)</text>
-<text x="30" y="256" font-size="13" fill="#1e293b">Analyse les arguments, choisit les capteurs (réels ou démo), démarre le collecteur, puis boucle sur les événements :</text>
-<text x="30" y="275" font-size="13" fill="#1e293b">redessin à chaque touche, rafraîchissement toutes les secondes. Hook de panic silencieux pour le thread collecteur.</text>
-<line x1="550" y1="316" x2="550" y2="346" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<text x="558" y="335" font-size="12" font-style="italic" fill="#475569">dessine / transmet les touches</text>
-<rect x="10" y="346" width="1080" height="190" rx="14" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
-<text x="30" y="374" font-size="16" font-weight="700" fill="#0f172a">Présentation — app.rs, ui.rs, render.rs  (thread principal)</text>
-<text x="30" y="396" font-size="13" fill="#1e293b">Ne connaît les mesures que par History, lue sous verrou (snapshot). Aucune règle de capteur ici.</text>
-<rect x="26" y="410" width="340" height="112" rx="9" fill="#ffffff" stroke="#22c55e" stroke-width="1.5"/>
-<text x="40" y="434" font-size="14" font-weight="700" fill="#0f172a">app.rs — état de l'application</text>
-<text x="40" y="456" font-size="12.5" fill="#1e293b">pause (affichage seul), fenêtre 1 / 5 / 30 min,</text>
-<text x="40" y="474" font-size="12.5" fill="#1e293b">reset, touches, LaneView par indicateur</text>
-<text x="40" y="492" font-size="12.5" fill="#1e293b">SPECS : 7 indicateurs, couleurs, échelles</text>
-<rect x="380" y="410" width="340" height="112" rx="9" fill="#ffffff" stroke="#22c55e" stroke-width="1.5"/>
-<text x="394" y="434" font-size="14" font-weight="700" fill="#0f172a">ui.rs — dessin ratatui</text>
-<text x="394" y="456" font-size="12.5" fill="#1e293b">Layout vertical : en-tête, 7 lignes, pied</text>
-<text x="394" y="474" font-size="12.5" fill="#1e293b">ligne Throttling compacte (5 lignes)</text>
-<text x="394" y="492" font-size="12.5" fill="#1e293b">valeurs à gauche, graphique à droite</text>
-<rect x="734" y="410" width="340" height="112" rx="9" fill="#ffffff" stroke="#22c55e" stroke-width="1.5"/>
-<text x="748" y="434" font-size="14" font-weight="700" fill="#0f172a">render.rs — fonctions pures</text>
-<text x="748" y="456" font-size="12.5" fill="#1e293b">échelle auto, rééchantillonnage,</text>
-<text x="748" y="474" font-size="12.5" fill="#1e293b">courbes braille, histogrammes en blocs,</text>
-<text x="748" y="492" font-size="12.5" fill="#1e293b">gros chiffres sur 3 lignes</text>
-<line x1="550" y1="538" x2="550" y2="568" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<text x="558" y="557" font-size="12" font-style="italic" fill="#475569">lit (snapshot) · reset</text>
-<rect x="10" y="568" width="1080" height="190" rx="14" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
-<text x="30" y="596" font-size="16" font-weight="700" fill="#0f172a">Collecte — collector.rs, history.rs  (thread « collector »)</text>
-<text x="30" y="618" font-size="13" fill="#1e293b">Séparée de l'interface : un capteur en échec ou qui panique donne « indisponible », jamais l'arrêt de la collecte.</text>
-<rect x="26" y="632" width="340" height="112" rx="9" fill="#ffffff" stroke="#eab308" stroke-width="1.5"/>
-<text x="40" y="656" font-size="14" font-weight="700" fill="#0f172a">Monitor — planification</text>
-<text x="40" y="678" font-size="12.5" fill="#1e293b">ventilateur toutes les 500 ms, le reste 1 s</text>
-<text x="40" y="696" font-size="12.5" fill="#1e293b">horloge monotone (pas de dérive)</text>
-<text x="40" y="714" font-size="12.5" fill="#1e293b">arrêt immédiat par canal, thread joint</text>
-<rect x="380" y="632" width="340" height="112" rx="9" fill="#ffffff" stroke="#eab308" stroke-width="1.5"/>
-<text x="394" y="656" font-size="14" font-weight="700" fill="#0f172a">History — Arc&lt;Mutex&gt;</text>
-<text x="394" y="678" font-size="12.5" fill="#1e293b">7 indicateurs · 30 minutes</text>
-<text x="394" y="696" font-size="12.5" fill="#1e293b">snapshot : valeurs, dernière, min / max / moy</text>
-<text x="394" y="714" font-size="12.5" fill="#1e293b">partagée avec l'interface, reset</text>
-<rect x="734" y="632" width="340" height="112" rx="9" fill="#ffffff" stroke="#eab308" stroke-width="1.5"/>
-<text x="748" y="656" font-size="14" font-weight="700" fill="#0f172a">history.rs — structures</text>
-<text x="748" y="678" font-size="12.5" fill="#1e293b">RingBuffer (NaN = mesure indisponible)</text>
-<text x="748" y="696" font-size="12.5" fill="#1e293b">BucketSeries : périodes de 10 s,</text>
-<text x="748" y="714" font-size="12.5" fill="#1e293b">une seule activation reste visible</text>
-<line x1="550" y1="760" x2="550" y2="790" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<text x="558" y="779" font-size="12" font-style="italic" fill="#475569">appelle (trait Sensors)</text>
-<rect x="10" y="790" width="1080" height="190" rx="14" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
-<text x="30" y="818" font-size="16" font-weight="700" fill="#0f172a">Capteurs — sensors/</text>
-<text x="30" y="840" font-size="13" fill="#1e293b">Lecture seule, sans sudo. None = mesure indisponible, jamais comptée comme 0.</text>
-<rect x="26" y="854" width="340" height="112" rx="9" fill="#ffffff" stroke="#f97316" stroke-width="1.5"/>
-<text x="40" y="878" font-size="14" font-weight="700" fill="#0f172a">mod.rs — interface commune</text>
-<text x="40" y="900" font-size="12.5" fill="#1e293b">trait Sensors (injectable dans les tests)</text>
-<text x="40" y="918" font-size="12.5" fill="#1e293b">FanReading : actif si state / pwm / rpm &gt; 0</text>
-<text x="40" y="936" font-size="12.5" fill="#1e293b">Throttle : en cours ≠ depuis le boot</text>
-<text x="40" y="918" font-size="12.5" font-style="italic" fill="#475569">implémenté par linux.rs et demo.rs</text>
-<rect x="380" y="854" width="340" height="112" rx="9" fill="#ffffff" stroke="#f97316" stroke-width="1.5"/>
-<text x="394" y="878" font-size="14" font-weight="700" fill="#0f172a">linux.rs — LinuxSensors (Pi)</text>
-<text x="394" y="900" font-size="12.5" fill="#1e293b">/proc/stat, meminfo, cpufreq, thermal</text>
-<text x="394" y="918" font-size="12.5" fill="#1e293b">hwmon trouvé par nom, redétecté si échec</text>
-<text x="394" y="936" font-size="12.5" fill="#1e293b">vcgencmd seulement sur le vrai /sys</text>
-<rect x="734" y="854" width="340" height="112" rx="9" fill="#ffffff" stroke="#f97316" stroke-width="1.5"/>
-<text x="748" y="878" font-size="14" font-weight="700" fill="#0f172a">demo.rs — DemoSensors (Mac)</text>
-<text x="748" y="900" font-size="12.5" fill="#1e293b">générateur xorshift reproductible</text>
-<text x="748" y="918" font-size="12.5" fill="#1e293b">cycle de charge : le ventilateur et le</text>
-<text x="748" y="936" font-size="12.5" fill="#1e293b">throttling se déclenchent</text>
-<line x1="550" y1="982" x2="550" y2="1010" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<text x="558" y="1000" font-size="12" font-style="italic" fill="#475569">lit (mode réel uniquement)</text>
-<rect x="10" y="1010" width="1080" height="80" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
-<text x="30" y="1038" font-size="16" font-weight="700" fill="#0f172a">Système (Raspberry Pi OS)</text>
-<text x="30" y="1060" font-size="13" fill="#1e293b">/proc · /sys/class/{thermal,hwmon} · /sys/devices/…/get_throttled · vcgencmd pmic_read_adc.   En mode démo : aucun accès.</text>
+<rect x="10" y="46" width="520" height="110" rx="9" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+<text x="24" y="68" font-size="15" font-weight="700" fill="#0f172a">Terminal — TUI (ratatui)</text>
+<text x="24" y="88" font-size="12.5" fill="#1e293b">app.rs · ui.rs · render.rs : 7 indicateurs, courbes, touches</text>
+<text x="24" y="106" font-size="12.5" fill="#1e293b">q quitter · p pause · r reset · w fenêtre 1 / 5 / 30 min</text>
+<text x="24" y="124" font-size="12.5" fill="#1e293b">Fonctionne par SSH ; inchangée</text>
+<rect x="570" y="46" width="520" height="110" rx="9" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+<text x="584" y="68" font-size="15" font-weight="700" fill="#0f172a">Navigateur — interface Web (web/)</text>
+<text x="584" y="88" font-size="12.5" fill="#1e293b">Ordinateur, tablette, téléphone ; plusieurs en même temps</text>
+<text x="584" y="106" font-size="12.5" fill="#1e293b">HTML + CSS + JS sans framework, embarqués dans le binaire</text>
+<text x="584" y="124" font-size="12.5" fill="#1e293b">Périodes 15 min à 48 h · actualisation 1 s · perte de connexion</text>
+<line x1="270" y1="156" x2="270" y2="196" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<line x1="830" y1="156" x2="830" y2="196" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<text x="842" y="182" font-size="12" font-style="italic" fill="#475569">HTTP · JSON (cookie de session)</text>
+<rect x="10" y="196" width="520" height="226" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="24" y="218" font-size="15" font-weight="700" fill="#0f172a">Point d'entrée — main.rs, cli.rs</text>
+<text x="24" y="238" font-size="12.5" fill="#1e293b">rpi-monitor [tui] [--demo] : TUI autonome (son propre collecteur)</text>
+<text x="24" y="256" font-size="12.5" fill="#1e293b">rpi-monitor serve [--demo] : service permanent, sans terminal</text>
+<text x="24" y="274" font-size="12.5" fill="#1e293b">Capteurs réels, ou démo (automatique hors Linux, ex. Mac)</text>
+<text x="24" y="292" font-size="12.5" fill="#1e293b">serve : arrêt propre sur SIGINT / SIGTERM (service.rs)</text>
+<text x="24" y="310" font-size="12.5" fill="#1e293b">Un port occupé ou invalide donne une erreur explicite</text>
+<rect x="570" y="196" width="520" height="226" rx="9" fill="#f8fafc" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="584" y="218" font-size="15" font-weight="700" fill="#0f172a">Service permanent — rpi-monitor serve</text>
+<rect x="584" y="226" width="492" height="42" rx="7" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+<text x="598" y="243" font-size="13" font-weight="700" fill="#0f172a">Serveur HTTP — server/mod.rs</text>
+<text x="598" y="260" font-size="12" fill="#1e293b">4 workers · en-têtes de sécurité · 127.0.0.1:8765 par défaut</text>
+<rect x="584" y="273" width="492" height="42" rx="7" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+<text x="598" y="290" font-size="13" font-weight="700" fill="#0f172a">API JSON /api/v1 — api.rs</text>
+<text x="598" y="307" font-size="12" fill="#1e293b">health · current · history · stats · events (lecture seule)</text>
+<rect x="584" y="320" width="492" height="42" rx="7" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+<text x="598" y="337" font-size="13" font-weight="700" fill="#0f172a">Accès protégé — auth.rs</text>
+<text x="598" y="354" font-size="12" fill="#1e293b">mot de passe en fichier 600 · cookie 30 j · 5 échecs/min</text>
+<rect x="584" y="367" width="492" height="42" rx="7" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+<text x="598" y="384" font-size="13" font-weight="700" fill="#0f172a">Configuration — config.rs</text>
+<text x="598" y="401" font-size="12" fill="#1e293b">défaut &lt; environnement &lt; option : --host --port ...</text>
+<line x1="270" y1="422" x2="270" y2="462" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<line x1="830" y1="422" x2="830" y2="462" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<text x="842" y="448" font-size="12" font-style="italic" fill="#475569">lit sous verrou</text>
+<rect x="10" y="462" width="1080" height="200" rx="9" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="24" y="484" font-size="15" font-weight="700" fill="#0f172a">Moteur commun — un seul collecteur, quel que soit le nombre de clients</text>
+<rect x="26" y="498" width="300" height="148" rx="9" fill="#ffffff" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="40" y="520" font-size="14" font-weight="700" fill="#0f172a">Capteurs — sensors/</text>
+<text x="40" y="540" font-size="12.5" fill="#1e293b">linux.rs : /proc, /sys, vcgencmd</text>
+<text x="40" y="558" font-size="12.5" fill="#1e293b">demo.rs : données synthétiques</text>
+<text x="40" y="576" font-size="12.5" fill="#1e293b">Lecture seule, sans sudo</text>
+<text x="40" y="594" font-size="12.5" fill="#1e293b">Absent = indisponible, jamais 0</text>
+<rect x="372" y="498" width="300" height="148" rx="9" fill="#ffffff" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="386" y="520" font-size="14" font-weight="700" fill="#0f172a">Collecteur — collector.rs</text>
+<text x="386" y="540" font-size="12.5" fill="#1e293b">Thread « collector »</text>
+<text x="386" y="558" font-size="12.5" fill="#1e293b">Ventilateur 500 ms · reste 1 s</text>
+<text x="386" y="576" font-size="12.5" fill="#1e293b">Un capteur en panne ne l'arrête pas</text>
+<text x="386" y="594" font-size="12.5" fill="#1e293b">Indépendant de la TUI et du Web</text>
+<rect x="718" y="498" width="356" height="148" rx="9" fill="#ffffff" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="732" y="520" font-size="14" font-weight="700" fill="#0f172a">Historique partagé (History)</text>
+<text x="732" y="540" font-size="12.5" fill="#1e293b">Buffers 30 min, 1 s : history.rs (TUI)</text>
+<text x="732" y="558" font-size="12.5" fill="#1e293b">Archive 48 h horodatée : archive.rs (Web)</text>
+<text x="732" y="576" font-size="12.5" fill="#1e293b">périodes de 10 s : moyenne, min, max</text>
+<text x="732" y="594" font-size="12.5" fill="#1e293b">Le reset de la TUI ne touche pas l'archive</text>
+<line x1="326" y1="572" x2="372" y2="572" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<line x1="672" y1="572" x2="718" y2="572" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<line x1="896" y1="662" x2="896" y2="702" stroke="#475569" stroke-width="2" marker-end="url(#arr)" marker-start="url(#arr)"/>
+<text x="908" y="688" font-size="12" font-style="italic" fill="#475569">écrit / relit</text>
+<rect x="572" y="702" width="518" height="108" rx="9" fill="#faf5ff" stroke="#9333ea" stroke-width="1.5"/>
+<text x="586" y="724" font-size="15" font-weight="700" fill="#0f172a">Sauvegarde — snapshot.rs</text>
+<text x="586" y="744" font-size="12.5" fill="#1e293b">history.json dans le dossier de l'exécutable</text>
+<text x="586" y="762" font-size="12.5" fill="#1e293b">toutes les 10 min et à l'arrêt, écriture atomique</text>
+<text x="586" y="780" font-size="12.5" fill="#1e293b">relue au démarrage ; échec journalisé, jamais fatal</text>
+<rect x="10" y="702" width="540" height="108" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="24" y="724" font-size="15" font-weight="700" fill="#0f172a">Déploiement (deploy/, scripts/, dist/)</text>
+<text x="24" y="744" font-size="12.5" fill="#1e293b">systemd : démarrage au boot, redémarrage si panne</text>
+<text x="24" y="762" font-size="12.5" fill="#1e293b">Un seul dossier : binaire, password, history.json</text>
+<text x="24" y="780" font-size="12.5" fill="#1e293b">Accès distant : tunnel au choix, hors du service</text>
 </svg>

@@ -1,6 +1,6 @@
 # Architecture
 
-Un seul moteur de monitoring, deux interfaces : le terminal (TUI) et le Web.
+Un seul moteur de monitoring, deux interfaces : le terminal (TUI) et le Web. Schéma complet : [architecture.svg](architecture.svg).
 
 ```
  Capteurs (sensors/)  ->  Collecteur (collector.rs, thread "collector")
@@ -47,3 +47,7 @@ Le service écoute sur 127.0.0.1 par défaut ; un tunnel le publie. Derrière un
 ## Fiabilité
 
 Un capteur en échec ou qui panique donne `None` ; le serveur répond depuis la mémoire ; les écritures disque sont dans un thread séparé. Les requêtes lentes ne bloquent que leur worker (4 threads).
+
+## Déploiement
+
+`scripts/build-pi.sh` (aussi lancé par le hook `post-commit`) remplit `dist/` : le binaire ARM64, l'unité systemd (un modèle) et `install-service.sh`. Le script, lancé sur le Pi dans le dossier où l'on a copié ces fichiers, génère l'unité avec ce dossier et son propriétaire, et démarre le service : binaire, `password` et `history.json` restent dans ce seul dossier. Le tunnel pour l'accès distant est au choix de l'utilisateur et hors du service. Voir [deploy-linux.md](deploy-linux.md).
