@@ -49,6 +49,8 @@ pub fn parse_throttled(raw: u32) -> Throttle {
 pub trait Sensors: Send {
     fn cpu_percent(&mut self) -> Option<f64>;
     fn cpu_freq_mhz(&mut self) -> Option<f64>;
+    /// Charge de chaque cœur (%) ; liste vide = indisponible, `None` = ce cœur sans mesure.
+    fn cpu_cores_percent(&mut self) -> Vec<Option<f64>> { vec![] }
     fn ram_percent(&mut self) -> Option<f64>;
     fn temperature_c(&mut self) -> Option<f64>;
     fn power_w(&mut self) -> Option<f64> { None }

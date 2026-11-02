@@ -82,6 +82,7 @@ pub struct LinuxSensors {
     temp_hwmon: Option<PathBuf>,
     throttle_file: Option<PathBuf>,
     prev_cpu: Option<(u64, u64)>, // (total, idle) ; vide tant qu'aucune mesure n'a servi de départ
+    prev_cores: Vec<(u64, u64)>,  // idem pour chaque cœur
 }
 
 impl LinuxSensors {
@@ -100,6 +101,7 @@ impl LinuxSensors {
             temp_hwmon: None,
             throttle_file: None,
             prev_cpu: None,
+            prev_cores: vec![],
         };
         s.detect();
         s
@@ -120,6 +122,18 @@ impl LinuxSensors {
             return None;
         }
         Some((v.iter().sum(), v[3] + v[4])) // idle + iowait
+    }
+
+    /// (total, inactif) de chaque ligne `cpuN` de /proc/stat, dans l'ordre.
+    fn read_core_times(&self) -> Vec<(u64, u64)> {
+        let Ok(text) = fs::read_to_string(self.proc.join("stat")) else { return vec![] };
+        text.lines()
+            .filter(|l| l.strip_prefix("cpu").is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit())))
+            .filter_map(|l| {
+                let v: Vec<u64> = l.split_whitespace().skip(1).take(8).filter_map(|x| x.parse().ok()).collect();
+                (v.len() >= 5).then(|| (v.iter().sum(), v[3] + v[4]))
+            })
+            .collect()
     }
 
     fn vcgencmd(&self, arg: &str) -> Option<String> {
@@ -144,6 +158,20 @@ impl Sensors for LinuxSensors {
         let d_total = cur.0.checked_sub(prev.0)?;
         let d_idle = cur.1.saturating_sub(prev.1);
         (d_total > 0).then(|| (d_total - d_idle.min(d_total)) as f64 / d_total as f64 * 100.0)
+    }
+
+    fn cpu_cores_percent(&mut self) -> Vec<Option<f64>> {
+        let cur = self.read_core_times();
+        let prev = std::mem::replace(&mut self.prev_cores, cur.clone());
+        cur.iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let p = prev.get(i)?; // 1re lecture : point de départ seulement
+                let d_total = c.0.checked_sub(p.0)?;
+                let d_idle = c.1.saturating_sub(p.1);
+                (d_total > 0).then(|| (d_total - d_idle.min(d_total)) as f64 / d_total as f64 * 100.0)
+            })
+            .collect()
     }
 
     fn cpu_freq_mhz(&mut self) -> Option<f64> {
@@ -330,5 +358,40 @@ mod tests {
     fn sensors_throttled_unavailable_is_none() {
         let d = tmpdir("thr-none");
         assert_eq!(LinuxSensors::with_roots(&d, &d).throttled(), None);
+    }
+
+    #[test]
+    fn cpu_cores_percent_per_core_from_proc_stat_deltas() {
+        let d = tmpdir("cores");
+        let stat = |c: [u64; 4]| {
+            // cœur i : actif c[i], inactif 1000 - c[i] sur l'intervalle ; ligne globale « cpu » ignorée
+            format!("cpu  1 0 0 1 0 0 0 0 0 0\ncpu0 {} 0 0 {} 0 0 0 0 0 0\ncpu1 {} 0 0 {} 0 0 0 0 0 0\ncpu2 {} 0 0 {} 0 0 0 0 0 0\ncpu3 {} 0 0 {} 0 0 0 0 0 0\nintr 5\n",
+                c[0], 1000 - c[0].min(1000), c[1], 1000 - c[1].min(1000), c[2], 1000 - c[2].min(1000), c[3], 1000 - c[3].min(1000))
+        };
+        write(&d.join("stat"), "cpu  0 0 0 0 0 0 0 0 0 0\ncpu0 0 0 0 0 0 0 0 0 0 0\ncpu1 0 0 0 0 0 0 0 0 0 0\ncpu2 0 0 0 0 0 0 0 0 0 0\ncpu3 0 0 0 0 0 0 0 0 0 0\n");
+        let mut s = LinuxSensors::with_roots(&d, &d);
+        assert_eq!(s.cpu_cores_percent(), vec![None; 4], "1re lecture : point de départ seulement");
+        write(&d.join("stat"), &stat([1000, 500, 0, 250]));
+        let v = s.cpu_cores_percent();
+        assert_eq!(v.len(), 4);
+        let got: Vec<f64> = v.iter().map(|x| x.unwrap()).collect();
+        assert_eq!(got, vec![100.0, 50.0, 0.0, 25.0]);
+    }
+
+    #[test]
+    fn cpu_cores_without_per_core_lines_is_empty() {
+        let d = tmpdir("cores-none");
+        write(&d.join("stat"), "cpu  100 0 100 800 0 0 0 0 0 0\n");
+        assert!(LinuxSensors::with_roots(&d, &d).cpu_cores_percent().is_empty());
+        assert!(LinuxSensors::with_roots(&tmpdir("cores-nofile"), &tmpdir("cores-nofile2")).cpu_cores_percent().is_empty());
+    }
+
+    #[test]
+    fn a_core_with_no_elapsed_time_is_unavailable_not_zero() {
+        let d = tmpdir("cores-idle");
+        write(&d.join("stat"), "cpu  0 0 0 0 0 0 0 0 0 0\ncpu0 10 0 0 90 0 0 0 0 0 0\n");
+        let mut s = LinuxSensors::with_roots(&d, &d);
+        s.cpu_cores_percent();
+        assert_eq!(s.cpu_cores_percent(), vec![None]);
     }
 }

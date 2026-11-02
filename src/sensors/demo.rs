@@ -41,6 +41,15 @@ impl Sensors for DemoSensors {
         Some(self.cpu)
     }
 
+    fn cpu_cores_percent(&mut self) -> Vec<Option<f64>> {
+        // quatre cœurs autour de la charge globale, chacun avec sa propre variation
+        (0..4).map(|i| {
+            let n = self.noise();
+            let share = [1.35, 1.0, 0.8, 0.55][i];
+            Some((self.cpu * share + 12.0 * n).clamp(0.0, 100.0))
+        }).collect()
+    }
+
     fn cpu_freq_mhz(&mut self) -> Option<f64> {
         let n = self.noise();
         Some(1500.0 + 900.0 * self.cpu / 100.0 + 30.0 * n)
@@ -153,5 +162,25 @@ mod tests {
         let ticks = run(1, 1000);
         let max_step = ticks.windows(2).map(|w| (w[1].temp - w[0].temp).abs()).fold(0.0, f64::max);
         assert!(max_step < 2.0, "température en dents de scie : {max_step}");
+    }
+
+    #[test]
+    fn demo_has_four_cores_in_range() {
+        let mut d = DemoSensors::new(3);
+        for _ in 0..50 {
+            let cores = d.cpu_cores_percent();
+            assert_eq!(cores.len(), 4);
+            assert!(cores.iter().all(|c| matches!(c, Some(v) if (0.0..=100.0).contains(v))));
+        }
+    }
+
+    #[test]
+    fn demo_cores_differ_from_each_other() {
+        let mut d = DemoSensors::new(3);
+        let distinct = (0..30).any(|_| {
+            let c = d.cpu_cores_percent();
+            c[0] != c[1]
+        });
+        assert!(distinct);
     }
 }
