@@ -56,7 +56,7 @@ rpi-monitor serve --port 9090      # lit « password » à côté de l'exécutab
 ```
 
 - Port et adresse réglables (`--port` / `RPI_MONITOR_PORT`, `--host` / `RPI_MONITOR_HOST`) ; l'écoute se fait par défaut sur `127.0.0.1`, un tunnel de votre choix permet l'accès à distance.
-- **Mot de passe obligatoire** (fichier `password` à côté de l'exécutable, cookie de session) puisqu'un tunnel rend le service public. Tout le service (binaire, mot de passe, sauvegarde) tient dans un seul dossier, `/opt/rpi-monitor/`.
+- **Mot de passe obligatoire** (fichier `password` à côté de l'exécutable, cookie de session) puisqu'un tunnel rend le service public. Tout le service (binaire, mot de passe, sauvegarde) tient dans un seul dossier : celui où l'on pose l'exécutable.
 - Lancé par systemd au démarrage du Pi, redémarré en cas de panne. Installation, mise à jour, désinstallation : [docs/deploy-linux.md](docs/deploy-linux.md). Conception : [docs/architecture.md](docs/architecture.md).
 - La TUI reste disponible telle quelle (`rpi-monitor` ou `rpi-monitor tui`), y compris par SSH.
 

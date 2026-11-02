@@ -1,12 +1,14 @@
+# Modèle d'unité : install-service.sh remplace @DIR@ (dossier où se trouve l'exécutable)
+# et @USER@ (propriétaire de ce dossier) puis l'installe dans /etc/systemd/system.
 [Unit]
 Description=rpi-monitor : surveillance du Raspberry Pi (collecte, API et interface Web)
 After=network.target
 
 [Service]
 Type=simple
-# Tout vit dans /opt/rpi-monitor : le binaire, le fichier « password » et la sauvegarde « history.json ».
-ExecStart=/opt/rpi-monitor/rpi-monitor serve
-WorkingDirectory=/opt/rpi-monitor
+# Tout vit dans le dossier de l'exécutable : le binaire, le fichier « password » et la sauvegarde « history.json ».
+ExecStart=@DIR@/rpi-monitor serve
+WorkingDirectory=@DIR@
 # Port et adresse : surchargeables sans toucher au code (systemctl edit rpi-monitor).
 # Par défaut le service n'écoute que sur 127.0.0.1 ; un tunnel le publie.
 Environment=RPI_MONITOR_PORT=8765
@@ -15,13 +17,13 @@ Restart=always
 RestartSec=5
 TimeoutStopSec=15
 
-# Durcissement : système en lecture seule, seul le dossier ci-dessus est inscriptible.
-User=rpi-monitor
+# Durcissement : système en lecture seule, seul le dossier de l'exécutable est inscriptible.
+User=@USER@
 SupplementaryGroups=video
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/opt/rpi-monitor
-ProtectHome=yes
+ReadWritePaths=@DIR@
+ProtectHome=read-only
 PrivateTmp=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
