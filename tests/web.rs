@@ -29,12 +29,10 @@ fn the_page_only_calls_routes_the_api_serves() {
     let known = ["/api/v1/health", "/api/v1/metrics/current", "/api/v1/metrics/history", "/api/v1/metrics/stats", "/api/v1/metrics/events", "/api/v1/login", "/api/v1/logout"];
     let js = web("app.js");
     let mut found = 0;
-    for part in js.split('\'').skip(1).step_by(2) {
-        if let Some(i) = part.find("/api/") {
-            let route = part[i..].split(['?', '$']).next().unwrap();
-            assert!(known.contains(&route), "route inconnue côté serveur : {route}");
-            found += 1;
-        }
+    for (i, _) in js.match_indices("/api/") {
+        let route: String = js[i..].chars().take_while(|c| !matches!(c, '\'' | '"' | '`' | '?' | '$' | ' ' | ')')).collect();
+        assert!(known.contains(&route.as_str()), "route inconnue côté serveur : {route}");
+        found += 1;
     }
     assert!(found >= 5, "la page doit appeler l'API");
 }

@@ -15,7 +15,7 @@ const LOST_AFTER_MS = 5000;
 const METRICS = [
   { id: 'cpu', kind: 'line', range: [0, 100], decimals: 0 },
   { id: 'freq', kind: 'line', range: null, decimals: 0 },
-  { id: 'power', kind: 'line', range: null, decimals: 2 },
+  { id: 'power', kind: 'line', range: null, decimals: 0 },
   { id: 'ram', kind: 'line', range: [0, 100], decimals: 0 },
   { id: 'temp', kind: 'line', range: null, decimals: 1 },
   { id: 'fan', kind: 'bar', range: [0, 1], decimals: 0 },
@@ -23,6 +23,12 @@ const METRICS = [
 ];
 
 // ---------- logique pure (testée avec node) ----------
+
+/** Valeur affichée d'un indicateur : entier arrondi au supérieur, sauf la température (1 décimale). */
+function fmtValue(v, m) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '--';
+  return m.decimals === 0 ? String(Math.ceil(v)) : Number(v).toFixed(m.decimals);
+}
 
 function fmt(v, decimals) {
   return v === null || v === undefined || Number.isNaN(v) ? '--' : Number(v).toFixed(decimals);
@@ -169,7 +175,7 @@ function drawChart(box, m, points, step, period, now) {
     cursor.setAttribute('x1', x(best[0]));
     cursor.setAttribute('x2', x(best[0]));
     cursor.setAttribute('visibility', 'visible');
-    const val = m.kind === 'bar' ? Math.round(best[1] * 100) + ' % du temps' : fmt(best[1], m.decimals + (m.decimals ? 0 : 1)) + ' ' + (state.meta[m.id] ? state.meta[m.id].unit : '');
+    const val = m.kind === 'bar' ? Math.round(best[1] * 100) + ' % du temps' : fmt(best[1], m.decimals) + ' ' + (state.meta[m.id] ? state.meta[m.id].unit : '');
     tip.textContent = timeLabel(best[0], period) + ' · ' + val;
     tip.hidden = false;
     const left = ((x(best[0]) / W) * r.width);
@@ -205,7 +211,7 @@ function ensureCards() {
       axis: h('div', { class: 'axis' }, h('span'), h('span')),
       events: h('div'),
     };
-    const el = h('section', { class: 'card', id: 'card-' + m.id }, h('h2', null, c.title, c.info), c.value, c.stats, c.detail, c.chart, c.axis, c.events);
+    const el = h('section', { class: 'card', id: 'card-' + m.id }, h('h2', null, c.title, c.info), h('div', { class: 'head' }, c.value, c.stats), c.detail, c.chart, c.axis, c.events);
     cards[m.id] = c;
     main.append(el);
   }
@@ -232,22 +238,22 @@ function render() {
       if (m.id === 'fan') {
         setValue(c, info.active ? 'Actif' : 'Arrêté', '', info.active !== null);
         c.detail.textContent = '';
-        c.detail.append(h('div', { class: 'stats' }, `niveau ${fmt(info.state, 0)} · PWM ${fmt(info.pwm, 0)} · ${fmt(info.rpm, 0)} tr/min`));
+        c.detail.append(h('div', { class: 'detail' }, `niveau ${fmt(info.state, 0)} · PWM ${fmt(info.pwm, 0)} · ${fmt(info.rpm, 0)} tr/min`));
       } else if (m.id === 'throttle') {
         setValue(c, info.active ? 'En cours' : 'Aucun', '', info.active !== null);
         c.detail.textContent = '';
         const pills = [...(info.now || []).map((f) => h('span', { class: 'pill bad' }, f)), ...(info.since_boot || []).filter((f) => !(info.now || []).includes(f)).map((f) => h('span', { class: 'pill' }, f + ' (depuis le boot)'))];
         c.detail.append(h('div', null, pills));
       } else {
-        setValue(c, fmt(info.value, m.decimals), info.unit, info.value !== null);
+        setValue(c, fmtValue(info.value, m), info.unit, info.value !== null);
       }
     }
     const st = state.stats && state.stats.stats[m.id];
     c.stats.textContent = '';
     if (m.kind === 'line') {
-      c.stats.append(...(st ? [h('span', null, 'min ', h('b', null, fmt(st.min, m.decimals + 1))), h('span', null, 'moy ', h('b', null, fmt(st.mean, m.decimals + 1))), h('span', null, 'max ', h('b', null, fmt(st.max, m.decimals + 1)))] : [h('span', null, 'min/moy/max indisponibles')]));
+      c.stats.append(...(st ? [h('span', null, 'min ', h('b', null, fmtValue(st.min, m))), h('span', null, 'moy ', h('b', null, fmtValue(st.mean, m))), h('span', null, 'max ', h('b', null, fmtValue(st.max, m)))] : [h('span', null, 'indisponible')]));
     } else if (st) {
-      c.stats.append(h('span', null, 'actif ', h('b', null, Math.round(st.mean * 100) + ' %'), ' du temps'));
+      c.stats.append(h('span', null, 'actif ', h('b', null, Math.round(st.mean * 100) + ' %')), h('span', null, 'du temps'));
     }
     if (state.history && state.history.series[m.id]) {
       drawChart(c.chart, m, state.history.series[m.id], state.history.step_s, state.history.period_s, now);
@@ -384,7 +390,7 @@ function start() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
+  module.exports = { fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
 } else {
   start();
 }

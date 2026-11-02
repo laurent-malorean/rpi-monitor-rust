@@ -10,6 +10,17 @@ const tests = {
     assert.equal(t.fmt(0, 1), '0.0');
     assert.equal(t.fmt(41.256, 1), '41.3');
   },
+  'fmtValue : entier arrondi au supérieur, sauf la température (1 décimale)'() {
+    const by = (id) => t.METRICS.find((m) => m.id === id);
+    assert.equal(t.fmtValue(0.3, by('cpu')), '1');
+    assert.equal(t.fmtValue(14.7, by('cpu')), '15');
+    assert.equal(t.fmtValue(12, by('cpu')), '12', 'une valeur entière ne monte pas');
+    assert.equal(t.fmtValue(0, by('cpu')), '0');
+    assert.equal(t.fmtValue(1513.6, by('freq')), '1514');
+    assert.equal(t.fmtValue(46.34, by('temp')), '46.3');
+    assert.equal(t.fmtValue(null, by('cpu')), '--', 'indisponible, jamais 0');
+    assert.equal(t.fmtValue(NaN, by('temp')), '--');
+  },
   'segments : un trou coupe la courbe au lieu de la relier'() {
     const pts = [[0, 1, 1, 1], [10, 2, 2, 2], [20, 3, 3, 3], [5000, 4, 4, 4], [5010, 5, 5, 5]];
     const segs = t.segments(pts, 10);
@@ -50,6 +61,7 @@ const tests = {
   },
   'metrics : les sept indicateurs dans l ordre de l API'() {
     assert.deepEqual(t.METRICS.map((m) => m.id), ['cpu', 'freq', 'power', 'ram', 'temp', 'fan', 'throttle']);
+    assert.deepEqual(t.METRICS.filter((m) => m.decimals > 0).map((m) => m.id), ['temp'], 'seule la température garde une décimale');
   },
   'eventLines : plus récents d abord, limités'() {
     const ev = Array.from({ length: 8 }, (_, i) => ({ start: i * 100, end: i * 100 + 60, peak: 1 }));
