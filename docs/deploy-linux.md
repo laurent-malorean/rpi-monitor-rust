@@ -16,11 +16,11 @@ Par défaut, le service cherche `password` et écrit `history.json` dans le doss
 
 ### Installation
 
-**1. Sur le Mac** : le binaire `dist/rpi-monitor` est recompilé automatiquement à chaque commit (hook `post-commit`) ; sinon `scripts/build-pi.sh`. Copier les fichiers sur le Pi.
+**1. Sur le Mac** : le binaire `dist/rpi-monitor` est recompilé automatiquement à chaque commit (hook `post-commit`) ; sinon `scripts/build-pi.sh`. Copier ces trois fichiers du Mac vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`), avec FileZilla (SFTP) :
 
-```sh
-scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
-```
+- `dist/rpi-monitor` : le binaire
+- `deploy/rpi-monitor.service` : l'unité systemd
+- `scripts/install-service.sh` : le script d'installation
 
 **2. Sur le Pi** (en SSH) : lancer l'installation.
 
@@ -64,11 +64,11 @@ Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel tr
 
 ### Mise à jour
 
-**1. Sur le Mac** : le binaire est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier.
+**1. Sur le Mac** : le binaire est déjà recompilé par le hook `post-commit` (sinon `scripts/build-pi.sh`). Recopier ces trois fichiers du Mac vers le dossier personnel du Pi (par exemple `/home/<utilisateur>/`), avec FileZilla (SFTP) :
 
-```sh
-scp dist/rpi-monitor deploy/rpi-monitor.service scripts/install-service.sh <utilisateur>@<pi>:~/
-```
+- `dist/rpi-monitor` : le binaire
+- `deploy/rpi-monitor.service` : l'unité systemd
+- `scripts/install-service.sh` : le script d'installation
 
 **2. Sur le Pi** : relancer le script, qui arrête le service, remplace le binaire, conserve le mot de passe et l'historique, puis redémarre.
 
