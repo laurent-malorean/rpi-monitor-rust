@@ -12,7 +12,7 @@ fn web(file: &str) -> String {
 fn page_is_responsive_and_loads_only_local_files() {
     let html = web("index.html");
     assert!(html.contains("name=\"viewport\"") && html.contains("width=device-width"));
-    assert!(html.contains("lang=\"fr\"") && html.contains("/app.js") && html.contains("/styles.css"));
+    assert!(html.contains("lang=\"fr\"") && html.contains("app.js") && html.contains("styles.css"));
 }
 
 #[test]
@@ -26,10 +26,10 @@ fn no_external_resource_is_needed() {
 
 #[test]
 fn the_page_only_calls_routes_the_api_serves() {
-    let known = ["/api/v1/health", "/api/v1/metrics/current", "/api/v1/metrics/history", "/api/v1/metrics/stats", "/api/v1/metrics/events", "/api/v1/login", "/api/v1/logout"];
+    let known = ["api/v1/health", "api/v1/metrics/current", "api/v1/metrics/history", "api/v1/metrics/stats", "api/v1/metrics/events", "api/v1/login", "api/v1/logout"];
     let js = web("app.js");
     let mut found = 0;
-    for (i, _) in js.match_indices("/api/") {
+    for (i, _) in js.match_indices("api/v1/") {
         let route: String = js[i..].chars().take_while(|c| !matches!(c, '\'' | '"' | '`' | '?' | '$' | ' ' | ')')).collect();
         assert!(known.contains(&route.as_str()), "route inconnue côté serveur : {route}");
         found += 1;
@@ -57,5 +57,16 @@ fn js_logic_passes_its_node_tests() {
 fn page_shows_which_build_is_running() {
     assert!(web("index.html").contains("id=\"version\""));
     let js = web("app.js");
-    assert!(js.contains("/api/v1/health") && js.contains("version"));
+    assert!(js.contains("api/v1/health") && js.contains("version"));
+}
+
+#[test]
+fn page_works_behind_a_path_prefix_such_as_a_tunnel_mount() {
+    // un tunnel peut publier le service sous un chemin (https://hote/rpi-monitor/) : aucune URL absolue
+    let html = web("index.html");
+    assert!(!html.contains("src=\"/") && !html.contains("href=\"/"), "ressources de la page : chemins relatifs");
+    let js = web("app.js");
+    for bad in ["'/api", "\"/api", "`/api", "fetch('/", "fetch(\"/"] {
+        assert!(!js.contains(bad), "URL absolue dans app.js : {bad}");
+    }
 }

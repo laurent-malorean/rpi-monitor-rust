@@ -356,16 +356,16 @@ async function guarded(kind, fn) {
 }
 
 const refreshCurrent = () => guarded('current', async () => {
-  state.current = await api('/api/v1/metrics/current');
+  state.current = await api('api/v1/metrics/current');
   render();
 });
 
 const refreshSlow = () => guarded('slow', async () => {
   const p = state.period;
   const [history, stats, events] = await Promise.all([
-    api('/api/v1/metrics/history?period=' + p),
-    api('/api/v1/metrics/stats?period=' + p),
-    api('/api/v1/metrics/events?period=' + p),
+    api('api/v1/metrics/history?period=' + p),
+    api('api/v1/metrics/stats?period=' + p),
+    api('api/v1/metrics/events?period=' + p),
   ]);
   if (p !== state.period) return; // la période a changé pendant la requête
   Object.assign(state, { history, stats, events, lastSlow: Date.now() });
@@ -389,7 +389,7 @@ function setPeriod(sec) {
 
 async function showVersion() {
   try {
-    const h = await api('/api/v1/health');
+    const h = await api('api/v1/health');
     document.getElementById('version').textContent = 'v' + h.version;
   } catch (_) { /* affichée au prochain chargement */ }
 }
@@ -410,7 +410,7 @@ function start() {
     const err = document.getElementById('login-error');
     err.textContent = '';
     try {
-      const r = await fetch('/api/v1/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: document.getElementById('password').value }) });
+      const r = await fetch('api/v1/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: document.getElementById('password').value }) });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
         err.textContent = body.error || 'Échec de la connexion';
@@ -425,7 +425,7 @@ function start() {
     }
   });
   document.getElementById('logout').addEventListener('click', async () => {
-    try { await fetch('/api/v1/logout', { method: 'POST', credentials: 'same-origin' }); } catch (_) { /* ignoré */ }
+    try { await fetch('api/v1/logout', { method: 'POST', credentials: 'same-origin' }); } catch (_) { /* ignoré */ }
     showLogin(true);
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { state.lastSlow = 0; tick(); } });

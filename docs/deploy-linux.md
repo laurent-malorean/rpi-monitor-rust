@@ -81,6 +81,8 @@ Le service n'écoute que sur `127.0.0.1` : rien n'est ouvert sur le réseau. Pou
 
 Un tunnel rend le service public : c'est pourquoi **un mot de passe est obligatoire** (`--no-auth` existe pour les tests, à ne jamais utiliser derrière un tunnel). Le mot de passe donne un cookie de session valable 30 jours ; 5 échecs par minute bloquent les tentatives. Les sessions sont en mémoire : un redémarrage du service oblige à se reconnecter. Choisir un mot de passe long (16 caractères ou plus).
 
+Le tunnel peut publier le service à la racine ou sous un chemin (par exemple `https://hote/rpi-monitor/`) : la page n'utilise que des chemins relatifs. Avec un chemin, **ouvrir l'adresse terminée par `/`** (`.../rpi-monitor/`), sinon le navigateur cherche les fichiers hors du chemin du tunnel et la page reste bloquée sur « Connexion… ».
+
 Derrière un tunnel HTTPS, le cookie reçoit l'attribut `Secure` si le tunnel transmet `X-Forwarded-Proto: https`.
 
 ### Mise à jour
