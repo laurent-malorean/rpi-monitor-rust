@@ -133,3 +133,18 @@ fn clients_that_never_send_their_announced_body_cannot_freeze_the_server() {
     drop(stalled);
     srv.stop();
 }
+
+#[test]
+fn csp_allows_only_the_nonce_inline_script_on_the_index_page() {
+    let m = Monitor::start(Box::new(DemoSensors::new(1)));
+    let srv = start(&m, None);
+    let (_, head, body) = http(srv.addr(), "GET", "/", &[], "");
+    let csp = head.lines().find(|l| l.to_lowercase().starts_with("content-security-policy:")).unwrap().to_string();
+    let nonce = csp.split("'nonce-").nth(1).and_then(|r| r.split('\'').next()).expect("nonce dans la CSP");
+    let script_src = csp.split(';').find(|d| d.trim().starts_with("script-src")).expect("directive script-src");
+    assert!(script_src.contains("'self'") && !script_src.contains("unsafe-inline"), "{csp}");
+    assert!(body.contains(&format!("nonce=\"{nonce}\"")), "le script en ligne porte le nonce de la CSP");
+    let (_, other, _) = http(srv.addr(), "GET", "/app.js", &[], "");
+    assert!(!other.to_lowercase().contains("nonce-"), "pas de nonce sur les autres fichiers");
+    srv.stop();
+}

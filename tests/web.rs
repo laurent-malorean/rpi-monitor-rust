@@ -70,3 +70,16 @@ fn page_works_behind_a_path_prefix_such_as_a_tunnel_mount() {
         assert!(!js.contains(bad), "URL absolue dans app.js : {bad}");
     }
 }
+
+#[test]
+fn page_finds_its_own_base_with_or_without_the_trailing_slash() {
+    // /rpi-monitor (sans « / ») : les chemins relatifs sortiraient du chemin du tunnel ;
+    // un petit script en ligne (nonce, CSP) pose donc <base> avant tout chargement
+    let html = web("index.html");
+    assert_eq!(html.matches("nonce=\"{{NONCE}}\"").count(), 1);
+    let boot = html.find("nonce=\"{{NONCE}}\"").unwrap();
+    assert!(boot < html.find("styles.css").unwrap() && boot < html.find("app.js").unwrap(), "le script de base passe avant toute ressource");
+    let script = &html[boot..html.find("</script>").unwrap()];
+    assert!(script.contains("createElement('base')") && script.contains("location.pathname"));
+    assert!(!web("app.js").contains("document.write"));
+}

@@ -39,7 +39,7 @@ pub fn same(a: &str, b: &str) -> bool {
 }
 
 /// 32 octets aléatoires du système, en hexadécimal.
-fn random_token() -> std::io::Result<String> {
+pub fn random_token() -> std::io::Result<String> {
     let mut buf = [0u8; 32];
     std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
     Ok(buf.iter().map(|b| format!("{b:02x}")).collect())

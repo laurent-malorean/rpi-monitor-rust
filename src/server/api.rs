@@ -23,10 +23,11 @@ pub struct Response {
     pub content_type: &'static str,
     pub body: Vec<u8>,
     pub set_cookie: Option<String>,
+    pub script_nonce: Option<String>, // page d'accueil : nonce du script en ligne, repris dans la CSP
 }
 
 fn json_response(status: u16, v: Value) -> Response {
-    Response { status, content_type: "application/json", body: v.to_string().into_bytes(), set_cookie: None }
+    Response { status, content_type: "application/json", body: v.to_string().into_bytes(), set_cookie: None, script_nonce: None }
 }
 
 fn error(status: u16, msg: impl Into<String>) -> Response {

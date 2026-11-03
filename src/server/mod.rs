@@ -38,11 +38,22 @@ pub struct Shared {
 }
 
 fn plain(status: u16, content_type: &'static str, body: &str) -> Response {
-    Response { status, content_type, body: body.as_bytes().to_vec(), set_cookie: None }
+    Response { status, content_type, body: body.as_bytes().to_vec(), set_cookie: None, script_nonce: None }
 }
 
 fn json_msg(status: u16, v: serde_json::Value) -> Response {
-    Response { status, content_type: "application/json", body: v.to_string().into_bytes(), set_cookie: None }
+    Response { status, content_type: "application/json", body: v.to_string().into_bytes(), set_cookie: None, script_nonce: None }
+}
+
+/// Page d'accueil : son petit script en ligne (qui fixe la base des chemins relatifs) reçoit un nonce
+/// frais, repris dans la CSP : aucun script en ligne n'est autorisé en dehors de celui-là.
+fn index_page() -> Response {
+    let Ok(nonce) = auth::random_token() else {
+        return json_msg(500, json!({ "error": "aléa système indisponible" }));
+    };
+    let mut r = plain(200, "text/html; charset=utf-8", &INDEX_HTML.replace("{{NONCE}}", &nonce));
+    r.script_nonce = Some(nonce);
+    r
 }
 
 fn login(shared: &Shared, req: &Request, now: f64) -> Response {
@@ -69,7 +80,7 @@ pub fn route(shared: &Shared, req: &Request, now: f64) -> Response {
     let path = req.url.split('?').next().unwrap_or("");
     if req.method == "GET" {
         match path {
-            "/" | "/index.html" => return plain(200, "text/html; charset=utf-8", INDEX_HTML),
+            "/" | "/index.html" => return index_page(),
             "/styles.css" => return plain(200, "text/css; charset=utf-8", STYLES_CSS),
             "/app.js" => return plain(200, "text/javascript; charset=utf-8", APP_JS),
             "/api/v1/health" => return api::handle("GET", req.url, &shared.history, &shared.info, now),
@@ -102,6 +113,11 @@ fn header(name: &str, value: &str) -> Option<Header> {
     Header::from_bytes(name.as_bytes(), value.as_bytes()).ok()
 }
 
+fn csp(nonce: Option<&str>) -> String {
+    let script = nonce.map_or(String::new(), |n| format!(" script-src 'self' 'nonce-{n}';"));
+    format!("default-src 'self';{script} style-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
+}
+
 fn request_header(request: &tiny_http::Request, name: &'static str) -> Option<String> {
     request.headers().iter().find(|h| h.field.equiv(name)).map(|h| h.value.as_str().to_string())
 }
@@ -122,7 +138,7 @@ fn serve_one(shared: &Shared, mut request: tiny_http::Request) {
         header("Cache-Control", cache),
         header("X-Content-Type-Options", "nosniff"),
         header("Referrer-Policy", "no-referrer"),
-        header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"),
+        header("Content-Security-Policy", &csp(r.script_nonce.as_deref())),
     ];
     if let Some(c) = &r.set_cookie {
         headers.push(header("Set-Cookie", c));
@@ -309,5 +325,23 @@ mod tests {
         assert_eq!(route(&s, &req("POST", "/api/v1/metrics/current", None, b""), 1.0).status, 405);
         assert_eq!(route(&s, &req("GET", "/nope", None, b""), 1.0).status, 404);
         assert_eq!(route(&s, &req("POST", "/", None, b""), 1.0).status, 404);
+    }
+
+    #[test]
+    fn index_page_gets_a_fresh_script_nonce_matching_its_inline_bootstrap() {
+        let s = shared(None);
+        let (a, b) = (route(&s, &req("GET", "/", None, b""), 1.0), route(&s, &req("GET", "/", None, b""), 1.0));
+        let (na, nb) = (a.script_nonce.clone().unwrap(), b.script_nonce.clone().unwrap());
+        assert_ne!(na, nb);
+        let html = String::from_utf8(a.body).unwrap();
+        assert!(html.contains(&format!("nonce=\"{na}\"")) && !html.contains("{{NONCE}}"));
+    }
+
+    #[test]
+    fn only_the_index_page_carries_a_nonce() {
+        let s = shared(None);
+        for url in ["/styles.css", "/app.js", "/api/v1/health", "/api/v1/metrics/current"] {
+            assert!(route(&s, &req("GET", url, None, b""), 1.0).script_nonce.is_none(), "{url}");
+        }
     }
 }

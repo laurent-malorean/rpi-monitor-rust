@@ -7,6 +7,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RPi Monitor">
 <meta name="theme-color" content="#1d4ed8">
+<script nonce="{{NONCE}}">
+// Chemins relatifs à la page : sans « / » final (adresse terminée par /rpi-monitor), le navigateur chercherait app.js
+// à la racine du site. Cette base ramène tous les chemins sous celui de la page.
+(function () {
+  var p = location.pathname.replace(/index\.html$/, '');
+  if (p.slice(-1) !== '/') p += '/';
+  var b = document.createElement('base');
+  b.href = p;
+  document.head.prepend(b);
+})();
+</script>
 <title>RPi Monitor</title>
 <link rel="stylesheet" href="styles.css">
 </head>
