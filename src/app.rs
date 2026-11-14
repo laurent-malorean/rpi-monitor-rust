@@ -25,9 +25,9 @@ const fn spec(key: Key, title: &'static str, unit: &'static str, color: Color) -
 
 pub const SPECS: [Spec; 7] = [
     Spec { decimals: 0, fixed: Some((0.0, 100.0)), ..spec(Key::Cpu, "CPU", "%", Color::Green) },
+    Spec { decimals: 1, fixed: Some((0.0, 100.0)), ..spec(Key::Ram, "RAM", "%", Color::Magenta) },
     Spec { decimals: 0, min_span: 400.0, ..spec(Key::Freq, "Fréquence", "MHz", Color::Cyan) },
     Spec { decimals: 2, min_span: 2.0, ..spec(Key::Power, "Consommation", "W", Color::LightYellow) },
-    Spec { decimals: 1, fixed: Some((0.0, 100.0)), ..spec(Key::Ram, "RAM", "%", Color::Magenta) },
     Spec { decimals: 1, min_span: 10.0, ..spec(Key::Temp, "Température", "°C", Color::Red) },
     Spec { bars: true, fixed: Some((0.0, 1.0)), step_s: 10.0, ..spec(Key::Fan, "Ventilateur", "tr/min", Color::Yellow) },
     Spec {
@@ -201,7 +201,7 @@ mod tests {
         let keys: Vec<Key> = SPECS.iter().map(|s| s.key).collect();
         assert_eq!(
             keys,
-            [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp, Key::Fan, Key::Throttle]
+            [Key::Cpu, Key::Ram, Key::Freq, Key::Power, Key::Temp, Key::Fan, Key::Throttle]
         );
         assert!(SPECS[6].compact && SPECS[5].bars && SPECS[6].bars);
     }

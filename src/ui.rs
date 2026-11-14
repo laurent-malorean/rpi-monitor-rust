@@ -271,7 +271,7 @@ mod tests {
     fn all_seven_indicators_are_stacked_in_order() {
         let app = App::new(history(), true);
         let s = screen(&app, 110, 45);
-        let rows: Vec<usize> = ["CPU (%)", "Fréquence (MHz)", "Consommation (W)", "RAM (%)", "Température (°C)",
+        let rows: Vec<usize> = ["CPU (%)", "RAM (%)", "Fréquence (MHz)", "Consommation (W)", "Température (°C)",
             "Ventilateur (tr/min)", "Throttling (flags)"]
             .iter()
             .map(|t| s.iter().position(|l| l.contains(t)).unwrap_or_else(|| panic!("{t} absent")))

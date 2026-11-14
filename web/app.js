@@ -14,9 +14,9 @@ const LOST_AFTER_MS = 5000;
 // kind : courbe (« line ») ou barres d'activité 0..1 (« bar ») ; range : plage fixe, sinon automatique.
 const METRICS = [
   { id: 'cpu', kind: 'line', range: [0, 100], decimals: 0 },
+  { id: 'ram', kind: 'line', range: [0, 100], decimals: 0 },
   { id: 'freq', kind: 'line', range: null, decimals: 0 },
   { id: 'power', kind: 'line', range: null, decimals: 0 },
-  { id: 'ram', kind: 'line', range: [0, 100], decimals: 0 },
   { id: 'temp', kind: 'line', range: null, decimals: 1 },
   { id: 'fan', kind: 'bar', range: [0, 1], decimals: 0 },
   { id: 'throttle', kind: 'bar', range: [0, 1], decimals: 0 },

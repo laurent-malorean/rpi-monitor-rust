@@ -30,7 +30,7 @@ pub enum Key {
 }
 
 impl Key {
-    pub const ALL: [Key; 7] = [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp, Key::Fan, Key::Throttle];
+    pub const ALL: [Key; 7] = [Key::Cpu, Key::Ram, Key::Freq, Key::Power, Key::Temp, Key::Fan, Key::Throttle];
 
     /// Identifiant stable (API, fichier de sauvegarde).
     pub fn id(self) -> &'static str {

@@ -73,7 +73,7 @@ const tests = {
     assert.equal(t.DEFAULT_PERIOD, 3600);
   },
   'metrics : les sept indicateurs dans l ordre de l API'() {
-    assert.deepEqual(t.METRICS.map((m) => m.id), ['cpu', 'freq', 'power', 'ram', 'temp', 'fan', 'throttle']);
+    assert.deepEqual(t.METRICS.map((m) => m.id), ['cpu', 'ram', 'freq', 'power', 'temp', 'fan', 'throttle']);
     assert.deepEqual(t.METRICS.filter((m) => m.decimals > 0).map((m) => m.id), ['temp'], 'seule la température garde une décimale');
   },
   'eventLines : plus récents d abord, limités'() {
