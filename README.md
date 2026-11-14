@@ -56,7 +56,7 @@ Les indicateurs sont empilés : la valeur actuelle en gros à gauche (avec min /
 
 ## Interface Web
 
-![Interface Web de rpi-monitor-rust sur un Raspberry Pi 5 (thème sombre, période 15 min)](docs/screen-web.png)
+![Interface Web de rpi-monitor-rust sur un Raspberry Pi 5 (thème sombre, période 1 h, avec Disques et Top RAM)](docs/screen-web.png)
 
 - Les 8 indicateurs à courbe : valeur actuelle, **min / moyenne / max** sur la période, courbe avec la plage min-max, info-bulle au survol.
 - **Disques** (sous le CPU) : une barre par point de montage, orange dès 80 %, rouge dès 90 %.
