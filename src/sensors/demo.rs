@@ -12,11 +12,12 @@ pub struct DemoSensors {
     cpu: f64,
     temp: f64,
     ram: f64,
+    swap: f64,
 }
 
 impl DemoSensors {
     pub fn new(seed: u64) -> Self {
-        Self { rng: seed.max(1), tick: 0, cpu: 20.0, temp: 45.0, ram: 30.0 }
+        Self { rng: seed.max(1), tick: 0, cpu: 20.0, temp: 45.0, ram: 30.0, swap: 10.0 }
     }
 
     /// xorshift64 : reproductible, sans dépendance. Valeur dans [-1, 1].
@@ -58,6 +59,11 @@ impl Sensors for DemoSensors {
     fn ram_percent(&mut self) -> Option<f64> {
         self.ram = (self.ram + self.noise()).clamp(5.0, 95.0);
         Some(self.ram)
+    }
+
+    fn swap_percent(&mut self) -> Option<f64> {
+        self.swap = (self.swap + self.noise() * 0.3).clamp(0.0, 60.0);
+        Some(self.swap)
     }
 
     fn temperature_c(&mut self) -> Option<f64> {

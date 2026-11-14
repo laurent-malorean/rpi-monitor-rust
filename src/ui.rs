@@ -1,4 +1,4 @@
-//! Dessin ratatui : en-tête, sept lignes empilées (valeurs à gauche, courbe à droite), pied de page.
+//! Dessin ratatui : en-tête, huit lignes empilées (valeurs à gauche, courbe à droite), pied de page.
 
 use crate::app::{App, LaneView, Spec, SPECS};
 use crate::collector::Key;
@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn bars_chart_labels_on_off_and_latest_value_on_the_right() {
-        let lines = text(&chart_lines(&SPECS[5], &[0.0, 1.0], 60.0, 12, 3));
+        let lines = text(&chart_lines(&SPECS[6], &[0.0, 1.0], 60.0, 12, 3));
         assert_eq!(lines.len(), 3);
         assert!(lines.iter().all(|l| l.chars().count() == 12));
         assert!(lines[0].trim_start().starts_with("ON"));
@@ -268,10 +268,10 @@ mod tests {
     }
 
     #[test]
-    fn all_seven_indicators_are_stacked_in_order() {
+    fn all_eight_indicators_are_stacked_in_order() {
         let app = App::new(history(), true);
         let s = screen(&app, 110, 45);
-        let rows: Vec<usize> = ["CPU (%)", "RAM (%)", "Fréquence (MHz)", "Consommation (W)", "Température (°C)",
+        let rows: Vec<usize> = ["CPU (%)", "RAM (%)", "Swap (%)", "Fréquence (MHz)", "Consommation (W)", "Température (°C)",
             "Ventilateur (tr/min)", "Throttling (flags)"]
             .iter()
             .map(|t| s.iter().position(|l| l.contains(t)).unwrap_or_else(|| panic!("{t} absent")))

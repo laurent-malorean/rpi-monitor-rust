@@ -29,6 +29,11 @@ fn read_str(path: &Path) -> Option<String> {
     fs::read_to_string(path).ok().map(|s| s.trim().to_string())
 }
 
+/// Valeur (kB) d'un champ de `/proc/meminfo`.
+fn meminfo_field(text: &str, name: &str) -> Option<f64> {
+    text.lines().find(|l| l.starts_with(name))?.split_whitespace().nth(1)?.parse().ok()
+}
+
 fn read_int(path: &Path) -> Option<i64> {
     read_str(path)?.parse().ok()
 }
@@ -182,11 +187,14 @@ impl Sensors for LinuxSensors {
 
     fn ram_percent(&mut self) -> Option<f64> {
         let text = fs::read_to_string(self.proc.join("meminfo")).ok()?;
-        let field = |name: &str| -> Option<f64> {
-            text.lines().find(|l| l.starts_with(name))?.split_whitespace().nth(1)?.parse().ok()
-        };
-        let (total, avail) = (field("MemTotal:")?, field("MemAvailable:")?);
+        let (total, avail) = (meminfo_field(&text, "MemTotal:")?, meminfo_field(&text, "MemAvailable:")?);
         (total > 0.0).then(|| (total - avail) / total * 100.0)
+    }
+
+    fn swap_percent(&mut self) -> Option<f64> {
+        let text = fs::read_to_string(self.proc.join("meminfo")).ok()?;
+        let (total, free) = (meminfo_field(&text, "SwapTotal:")?, meminfo_field(&text, "SwapFree:")?);
+        (total > 0.0).then(|| (total - free) / total * 100.0)
     }
 
     fn temperature_c(&mut self) -> Option<f64> {
@@ -310,6 +318,16 @@ mod tests {
         write(&d.join("meminfo"), "MemTotal:        1000 kB\nMemFree:          100 kB\nMemAvailable:     250 kB\n");
         let mut s = LinuxSensors::with_roots(&d, &d);
         assert_eq!(s.ram_percent(), Some(75.0));
+    }
+
+    #[test]
+    fn swap_percent_is_used_share_of_swap_and_unavailable_without_swap() {
+        let d = tmpdir("swap");
+        write(&d.join("meminfo"), "MemTotal: 1000 kB\nMemAvailable: 250 kB\nSwapTotal: 2000 kB\nSwapFree: 500 kB\n");
+        let mut s = LinuxSensors::with_roots(&d, &d);
+        assert_eq!(s.swap_percent(), Some(75.0));
+        write(&d.join("meminfo"), "MemTotal: 1000 kB\nMemAvailable: 250 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n");
+        assert_eq!(s.swap_percent(), None); // pas de swap : indisponible, jamais 0
     }
 
     #[test]

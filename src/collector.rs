@@ -24,13 +24,14 @@ pub enum Key {
     Freq,
     Power,
     Ram,
+    Swap,
     Temp,
     Fan,
     Throttle,
 }
 
 impl Key {
-    pub const ALL: [Key; 7] = [Key::Cpu, Key::Ram, Key::Freq, Key::Power, Key::Temp, Key::Fan, Key::Throttle];
+    pub const ALL: [Key; 8] = [Key::Cpu, Key::Ram, Key::Swap, Key::Freq, Key::Power, Key::Temp, Key::Fan, Key::Throttle];
 
     /// Identifiant stable (API, fichier de sauvegarde).
     pub fn id(self) -> &'static str {
@@ -39,6 +40,7 @@ impl Key {
             Key::Freq => "freq",
             Key::Power => "power",
             Key::Ram => "ram",
+            Key::Swap => "swap",
             Key::Temp => "temp",
             Key::Fan => "fan",
             Key::Throttle => "throttle",
@@ -65,6 +67,7 @@ pub struct Readings {
     pub freq: Option<f64>,
     pub power: Option<f64>,
     pub ram: Option<f64>,
+    pub swap: Option<f64>,
     pub temp: Option<f64>,
     pub throttle: Option<Throttle>,
     pub cores: Vec<Option<f64>>, // charge de chaque cœur ; vide = indisponible
@@ -72,14 +75,14 @@ pub struct Readings {
 
 /// Historiques de tous les indicateurs (30 min) + dernières lectures détaillées.
 pub struct History {
-    rings: [RingBuffer; 5], // cpu, freq, power, ram, temp
+    rings: [RingBuffer; 6], // cpu, freq, power, ram, temp, swap
     core_rings: Vec<RingBuffer>, // 30 min par cœur de CPU (TUI)
     fan: BucketSeries,
     throttle: BucketSeries,
     fan_last: Option<FanReading>,
     throttle_last: Option<Throttle>,
     cores_last: Vec<Option<f64>>,
-    archive: [Series; 7], // 48 h horodatées, indexées comme `Key::ALL`
+    archive: [Series; 8], // 48 h horodatées, indexées comme `Key::ALL`
     cores: Vec<Series>,   // 48 h par cœur de CPU, créées au fur et à mesure
 }
 
@@ -90,6 +93,7 @@ fn ring_index(key: Key) -> Option<usize> {
         Key::Power => Some(2),
         Key::Ram => Some(3),
         Key::Temp => Some(4),
+        Key::Swap => Some(5),
         Key::Fan | Key::Throttle => None,
     }
 }
@@ -117,10 +121,12 @@ impl History {
     }
 
     pub fn record_slow(&mut self, ts: f64, r: &Readings) {
-        for (ring, v) in self.rings.iter_mut().zip([r.cpu, r.freq, r.power, r.ram, r.temp]) {
+        for (ring, v) in self.rings.iter_mut().zip([r.cpu, r.freq, r.power, r.ram, r.temp, r.swap]) {
             ring.add(v);
         }
-        for (key, v) in [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp].into_iter().zip([r.cpu, r.freq, r.power, r.ram, r.temp]) {
+        for (key, v) in [Key::Cpu, Key::Freq, Key::Power, Key::Ram, Key::Temp, Key::Swap]
+            .into_iter()
+            .zip([r.cpu, r.freq, r.power, r.ram, r.temp, r.swap]) {
             self.archive[key.index()].add(ts, v);
         }
         for (i, v) in r.cores.iter().take(MAX_CORES).enumerate() {
@@ -250,6 +256,7 @@ fn run(mut sensors: Box<dyn Sensors>, history: Arc<Mutex<History>>, stop: Receiv
                 freq: safe(|| sensors.cpu_freq_mhz()),
                 power: safe(|| sensors.power_w()),
                 ram: safe(|| sensors.ram_percent()),
+                swap: safe(|| sensors.swap_percent()),
                 temp: safe(|| sensors.temperature_c()),
                 throttle: safe(|| sensors.throttled()).map(parse_throttled),
                 cores: catch_unwind(AssertUnwindSafe(|| sensors.cpu_cores_percent())).unwrap_or_default(),

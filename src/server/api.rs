@@ -41,6 +41,7 @@ fn meta(key: Key) -> (&'static str, &'static str, &'static str) {
         Key::Freq => (key.id(), "Fréquence", "MHz"),
         Key::Power => (key.id(), "Consommation", "W"),
         Key::Ram => (key.id(), "RAM", "%"),
+        Key::Swap => (key.id(), "Swap", "%"),
         Key::Temp => (key.id(), "Température", "°C"),
         Key::Fan => (key.id(), "Ventilateur", ""),
         Key::Throttle => (key.id(), "Throttling", ""),
@@ -252,7 +253,7 @@ mod tests {
         let cpu = &v["metrics"]["cpu"];
         assert_eq!((cpu["label"].as_str(), cpu["unit"].as_str(), cpu["value"].as_f64()), (Some("CPU"), Some("%"), Some(39.0)));
         assert!(v["metrics"]["ram"]["value"].is_null()); // jamais 0
-        assert_eq!(v["metrics"].as_object().unwrap().len(), 7);
+        assert_eq!(v["metrics"].as_object().unwrap().len(), 8);
     }
 
     #[test]
@@ -291,7 +292,7 @@ mod tests {
     fn history_defaults_to_every_key_and_one_hour() {
         let (_, v) = get(&filled(), "/api/v1/metrics/history", 1030.0);
         assert_eq!(v["period_s"].as_f64(), Some(3600.0));
-        assert_eq!(v["series"].as_object().unwrap().len(), 7);
+        assert_eq!(v["series"].as_object().unwrap().len(), 8);
         assert!(v["series"]["ram"].as_array().unwrap().is_empty());
     }
 

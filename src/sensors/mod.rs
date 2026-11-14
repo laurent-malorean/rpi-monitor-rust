@@ -52,6 +52,8 @@ pub trait Sensors: Send {
     /// Charge de chaque cœur (%) ; liste vide = indisponible, `None` = ce cœur sans mesure.
     fn cpu_cores_percent(&mut self) -> Vec<Option<f64>> { vec![] }
     fn ram_percent(&mut self) -> Option<f64>;
+    /// Part du swap utilisée (%) ; `None` si la machine n'a pas de swap.
+    fn swap_percent(&mut self) -> Option<f64> { None }
     fn temperature_c(&mut self) -> Option<f64>;
     fn power_w(&mut self) -> Option<f64> { None }
     fn throttled(&mut self) -> Option<u32> { None }

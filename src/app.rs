@@ -23,9 +23,10 @@ const fn spec(key: Key, title: &'static str, unit: &'static str, color: Color) -
     Spec { key, title, unit, color, decimals: 1, fixed: None, min_span: 10.0, bars: false, step_s: 1.0, compact: false }
 }
 
-pub const SPECS: [Spec; 7] = [
+pub const SPECS: [Spec; 8] = [
     Spec { decimals: 0, fixed: Some((0.0, 100.0)), ..spec(Key::Cpu, "CPU", "%", Color::Green) },
     Spec { decimals: 1, fixed: Some((0.0, 100.0)), ..spec(Key::Ram, "RAM", "%", Color::Magenta) },
+    Spec { decimals: 1, fixed: Some((0.0, 100.0)), ..spec(Key::Swap, "Swap", "%", Color::LightMagenta) },
     Spec { decimals: 0, min_span: 400.0, ..spec(Key::Freq, "Fréquence", "MHz", Color::Cyan) },
     Spec { decimals: 2, min_span: 2.0, ..spec(Key::Power, "Consommation", "W", Color::LightYellow) },
     Spec { decimals: 1, min_span: 10.0, ..spec(Key::Temp, "Température", "°C", Color::Red) },
@@ -201,9 +202,9 @@ mod tests {
         let keys: Vec<Key> = SPECS.iter().map(|s| s.key).collect();
         assert_eq!(
             keys,
-            [Key::Cpu, Key::Ram, Key::Freq, Key::Power, Key::Temp, Key::Fan, Key::Throttle]
+            [Key::Cpu, Key::Ram, Key::Swap, Key::Freq, Key::Power, Key::Temp, Key::Fan, Key::Throttle]
         );
-        assert!(SPECS[6].compact && SPECS[5].bars && SPECS[6].bars);
+        assert!(SPECS[7].compact && SPECS[6].bars && SPECS[7].bars);
     }
 
     #[test]
@@ -291,10 +292,10 @@ mod tests {
     fn fan_lane_shows_rpm_state_pwm_and_active_share() {
         let mut h = History::new();
         h.record_fast(100.0, Some(FanReading { state: Some(1), pwm: Some(75), rpm: Some(1700) }));
-        let v = lane_view(&SPECS[5], &h, 300.0);
+        let v = lane_view(&SPECS[6], &h, 300.0);
         assert_eq!(v.big, "1700");
         assert_eq!(v.stats, "ON état 1 pwm 75 · actif 100%");
-        let none = lane_view(&SPECS[5], &History::new(), 300.0);
+        let none = lane_view(&SPECS[6], &History::new(), 300.0);
         assert_eq!((none.big.as_str(), none.stats.as_str()), ("--", "N/A état -- pwm --"));
     }
 
@@ -303,13 +304,13 @@ mod tests {
         let at = |raw| {
             let mut h = History::new();
             h.record_slow(100.0, &Readings { throttle: Some(parse_throttled(raw)), ..Default::default() });
-            lane_view(&SPECS[6], &h, 300.0)
+            lane_view(&SPECS[7], &h, 300.0)
         };
         assert_eq!((at(0).big.as_str(), at(0).stats.as_str()), ("0", "OK"));
         assert_eq!(at(0x80000).stats, "OK (déjà: limite temp)");
         let now = at(0x5);
         assert_eq!((now.big.as_str(), now.stats.as_str()), ("2", "sous-tension+throttle"));
-        let unknown = lane_view(&SPECS[6], &History::new(), 300.0);
+        let unknown = lane_view(&SPECS[7], &History::new(), 300.0);
         assert_eq!((unknown.big.as_str(), unknown.stats.as_str()), ("--", "N/A"));
     }
 

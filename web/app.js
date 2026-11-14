@@ -15,6 +15,7 @@ const LOST_AFTER_MS = 5000;
 const METRICS = [
   { id: 'cpu', kind: 'line', range: [0, 100], decimals: 0 },
   { id: 'ram', kind: 'line', range: [0, 100], decimals: 0 },
+  { id: 'swap', kind: 'line', range: [0, 100], decimals: 0 },
   { id: 'freq', kind: 'line', range: null, decimals: 0 },
   { id: 'power', kind: 'line', range: null, decimals: 0 },
   { id: 'temp', kind: 'line', range: null, decimals: 1 },
