@@ -2,14 +2,14 @@
   --bg: #f4f5f7; --card: #ffffff; --text: #16181d; --muted: #6a7280; --line: #e3e6ea;
   --accent: #1d4ed8; --ok: #15803d; --bad: #b91c1c; --warn: #b45309;
   --c-core0: #2563eb; --c-core1: #dc2626; --c-core2: #059669; --c-core3: #d97706; --c-core4: #7c3aed; --c-core5: #0891b2; --c-core6: #be185d; --c-core7: #65a30d;
-  --c-cpu: #2563eb; --c-freq: #7c3aed; --c-power: #d97706; --c-ram: #0891b2; --c-temp: #dc2626; --c-fan: #059669; --c-throttle: #be123c;
+  --c-cpu: #2563eb; --c-freq: #7c3aed; --c-power: #d97706; --c-ram: #0891b2; --c-swap: #db2777; --c-temp: #dc2626; --c-fan: #059669; --c-throttle: #be123c;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0e1116; --card: #171b22; --text: #e8eaee; --muted: #97a0ae; --line: #2a303a;
     --accent: #3b82f6; --ok: #4ade80; --bad: #f87171; --warn: #fbbf24;
     --c-core0: #60a5fa; --c-core1: #f87171; --c-core2: #34d399; --c-core3: #fbbf24; --c-core4: #a78bfa; --c-core5: #22d3ee; --c-core6: #f472b6; --c-core7: #a3e635;
-    --c-cpu: #60a5fa; --c-freq: #a78bfa; --c-power: #fbbf24; --c-ram: #22d3ee; --c-temp: #f87171; --c-fan: #34d399; --c-throttle: #fb7185;
+    --c-cpu: #60a5fa; --c-freq: #a78bfa; --c-power: #fbbf24; --c-ram: #22d3ee; --c-swap: #f472b6; --c-temp: #f87171; --c-fan: #34d399; --c-throttle: #fb7185;
   }
 }
 * { box-sizing: border-box; }

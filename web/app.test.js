@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 const t = require('./app.js');
 
 const tests = {
+  'styles : chaque indicateur a sa couleur, en thème clair et en thème sombre'() {
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'styles.css'), 'utf8');
+    for (const m of t.METRICS) {
+      assert.equal(css.split(`--c-${m.id}:`).length - 1, 2, `couleur --c-${m.id} (clair + sombre)`);
+    }
+  },
   'fmt : null et NaN donnent -- (jamais 0)'() {
     assert.equal(t.fmt(null, 1), '--');
     assert.equal(t.fmt(undefined, 1), '--');
@@ -77,7 +83,7 @@ const tests = {
     assert.deepEqual(t.PERIODS.map((p) => p.s), [900, 3600, 21600, 86400, 172800]);
     assert.equal(t.DEFAULT_PERIOD, 3600);
   },
-  'metrics : les sept indicateurs dans l ordre de l API'() {
+  'metrics : les huit indicateurs dans l ordre de l API'() {
     assert.deepEqual(t.METRICS.map((m) => m.id), ['cpu', 'ram', 'swap', 'freq', 'power', 'temp', 'fan', 'throttle']);
     assert.deepEqual(t.METRICS.filter((m) => m.decimals > 0).map((m) => m.id), ['temp'], 'seule la température garde une décimale');
   },
