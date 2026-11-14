@@ -3,7 +3,7 @@
 
 use crate::archive::{Point, Series};
 use crate::history::{BucketSeries, RingBuffer, Stats};
-use crate::sensors::{parse_throttled, FanReading, ProcessRam, Sensors, Throttle};
+use crate::sensors::{parse_throttled, DiskUsage, FanReading, ProcessRam, Sensors, Throttle};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -16,6 +16,7 @@ const FAST: Duration = Duration::from_millis(500); // ventilateur
 const SLOW_EVERY: u32 = 2; // autres métriques : 1 s
 const TOP_EVERY: u32 = 10; // applications gourmandes en RAM : 5 s
 const TOP_N: usize = 5;
+const DISK_EVERY: u32 = 60; // points de montage : 30 s
 pub const ARCHIVE_S: f64 = 48.0 * 3600.0; // historique long
 const ARCHIVE_STEP_S: f64 = 10.0;
 pub const MAX_CORES: usize = 64;
@@ -85,6 +86,7 @@ pub struct History {
     throttle_last: Option<Throttle>,
     cores_last: Vec<Option<f64>>,
     top_ram: Vec<ProcessRam>, // dernier relevé, sans historique
+    disks: Vec<DiskUsage>,    // idem
     archive: [Series; 8], // 48 h horodatées, indexées comme `Key::ALL`
     cores: Vec<Series>,   // 48 h par cœur de CPU, créées au fur et à mesure
 }
@@ -112,6 +114,7 @@ impl History {
             throttle_last: None,
             cores_last: vec![],
             top_ram: vec![],
+            disks: vec![],
             archive: std::array::from_fn(|_| Series::new(ARCHIVE_STEP_S, ARCHIVE_S)),
             cores: vec![],
         }
@@ -126,6 +129,14 @@ impl History {
 
     pub fn record_top(&mut self, top: Vec<ProcessRam>) {
         self.top_ram = top;
+    }
+
+    pub fn record_disks(&mut self, disks: Vec<DiskUsage>) {
+        self.disks = disks;
+    }
+
+    pub fn disks(&self) -> &[DiskUsage] {
+        &self.disks
     }
 
     pub fn top_ram(&self) -> &[ProcessRam] {
@@ -279,6 +290,10 @@ fn run(mut sensors: Box<dyn Sensors>, history: Arc<Mutex<History>>, stop: Receiv
             let top = catch_unwind(AssertUnwindSafe(|| sensors.top_ram(TOP_N))).unwrap_or_default();
             lock(&history).record_top(top);
         }
+        if tick.is_multiple_of(DISK_EVERY) {
+            let disks = catch_unwind(AssertUnwindSafe(|| sensors.disks())).unwrap_or_default();
+            lock(&history).record_disks(disks);
+        }
         tick += 1;
         // horloge monotone : pas de dérive cumulée
         let wait = (start + FAST * tick).saturating_duration_since(Instant::now());
@@ -428,6 +443,15 @@ mod tests {
         h.record_top(vec![p("b"), p("c")]);
         h.reset();
         assert_eq!(h.top_ram().iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["b", "c"]);
+    }
+
+    #[test]
+    fn disks_keep_the_latest_list() {
+        let mut h = History::new();
+        assert!(h.disks().is_empty());
+        h.record_disks(vec![crate::sensors::DiskUsage { mount: "/".into(), total_mb: 100.0, used_mb: 25.0 }]);
+        assert_eq!(h.disks()[0].mount, "/");
+        assert_eq!(h.disks()[0].percent(), 25.0);
     }
 
     #[test]

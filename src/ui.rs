@@ -12,6 +12,7 @@ use ratatui::Frame;
 pub const AXIS_W: usize = 6;
 const COMPACT_H: u16 = 5;
 const TOP_H: u16 = 6; // titre + 5 applications
+const DISKS_MAX: usize = 8;
 
 /// Lignes du graphique d'un indicateur (axe + tracé), `w` x `h` cellules.
 pub fn chart_lines(spec: &Spec, values: &[f64], window_s: f64, w: usize, h: usize) -> Vec<Line<'static>> {
@@ -115,13 +116,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // lignes à hauteur variable : répartition cumulée ; la ligne compacte garde 5 lignes
     let compact = SPECS.iter().filter(|s| s.compact).count();
-    let flex_h = body.height.saturating_sub(COMPACT_H * compact as u16 + TOP_H);
+    let disks_h = 1 + app.disks().len().clamp(1, DISKS_MAX) as u16; // titre + une barre par point de montage
+    let flex_h = body.height.saturating_sub(COMPACT_H * compact as u16 + TOP_H + disks_h);
     let mut flex = split_heights(flex_h, SPECS.len() - compact).into_iter();
     let mut constraints: Vec<Constraint> = vec![];
     for s in SPECS.iter() {
         constraints.push(Constraint::Length(if s.compact { COMPACT_H } else { flex.next().unwrap_or(0) }));
-        if s.key == Key::Swap {
-            constraints.push(Constraint::Length(TOP_H));
+        match s.key {
+            Key::Cpu => constraints.push(Constraint::Length(disks_h)),
+            Key::Swap => constraints.push(Constraint::Length(TOP_H)),
+            _ => {}
         }
     }
     let lanes = Layout::vertical(constraints).split(body);
@@ -134,11 +138,42 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let mut areas = lanes.iter();
     for (spec, view) in SPECS.iter().zip(app.views()) {
         draw_lane(frame, spec, view, *areas.next().unwrap_or(&Rect::default()));
-        if spec.key == Key::Swap {
-            draw_top_ram(frame, app, *areas.next().unwrap_or(&Rect::default()));
+        match spec.key {
+            Key::Cpu => draw_disks(frame, app, *areas.next().unwrap_or(&Rect::default())),
+            Key::Swap => draw_top_ram(frame, app, *areas.next().unwrap_or(&Rect::default())),
+            _ => {}
         }
     }
     frame.render_widget(footer(), footer_area);
+}
+
+fn draw_disks(frame: &mut Frame, app: &App, area: Rect) {
+    const NAME_W: usize = 18;
+    let dim = Style::new().add_modifier(Modifier::DIM);
+    let mut lines = vec![Line::from(Span::styled("Disques", Style::new().add_modifier(Modifier::BOLD)))];
+    if app.disks().is_empty() {
+        lines.push(Line::styled("indisponible", dim));
+    }
+    let texts: Vec<String> = app
+        .disks()
+        .iter()
+        .take(DISKS_MAX)
+        .map(|d| format!("{} / {}  {:.0} %", fmt_memory(d.used_mb), fmt_memory(d.total_mb), d.percent()))
+        .collect();
+    let text_w = texts.iter().map(|t| t.chars().count()).max().unwrap_or(0);
+    let bar_w = (area.width as usize).saturating_sub(2 + NAME_W + 1 + text_w + 1).max(4);
+    for (d, text) in app.disks().iter().zip(&texts) {
+        let fill = ((d.percent() / 100.0 * bar_w as f64).round() as usize).min(bar_w);
+        let color = if d.percent() >= 90.0 { Color::Red } else if d.percent() >= 80.0 { Color::Yellow } else { Color::Green };
+        let name: String = d.mount.chars().take(NAME_W).collect();
+        lines.push(Line::from(vec![
+            Span::raw(format!("{name:<NAME_W$} ")),
+            Span::styled("█".repeat(fill), Style::new().fg(color)),
+            Span::styled("░".repeat(bar_w - fill), dim),
+            Span::raw(format!(" {text}")),
+        ]));
+    }
+    frame.render_widget(Paragraph::new(lines), area.inner(Margin::new(1, 0)));
 }
 
 fn draw_top_ram(frame: &mut Frame, app: &App, area: Rect) {
@@ -290,7 +325,7 @@ mod tests {
     #[test]
     fn all_eight_indicators_are_stacked_in_order() {
         let app = App::new(history(), true);
-        let s = screen(&app, 110, 52);
+        let s = screen(&app, 110, 56);
         let rows: Vec<usize> = ["CPU (%)", "RAM (%)", "Swap (%)", "Fréquence (MHz)", "Consommation (W)", "Température (°C)",
             "Ventilateur (tr/min)", "Throttling (flags)"]
             .iter()
@@ -300,13 +335,28 @@ mod tests {
     }
 
     #[test]
+    fn disks_block_sits_after_cpu_with_one_progress_bar_per_mount_point() {
+        let h = history();
+        let d = |m: &str, total: f64, used: f64| crate::sensors::DiskUsage { mount: m.into(), total_mb: total, used_mb: used };
+        h.lock().unwrap().record_disks(vec![d("/", 59000.0, 12000.0), d("/media/disk1", 1048576.0, 524288.0)]);
+        let s = screen(&App::new(h, true), 110, 60);
+        let row = |t: &str| s.iter().position(|l| l.contains(t)).unwrap_or_else(|| panic!("{t} absent"));
+        let (cpu, disks, ram) = (row("CPU (%)"), row("Disques"), row("RAM (%)"));
+        assert!(cpu < disks && disks < ram, "ordre : {cpu} {disks} {ram}");
+        assert!(s[disks + 1].starts_with(" /") && s[disks + 1].contains("11.7 Go / 57.6 Go") && s[disks + 1].contains("20 %"));
+        let l = &s[disks + 2];
+        assert!(l.contains("/media/disk1") && l.contains("512.0 Go / 1.0 To") && l.contains("50 %"));
+        assert!(l.contains('█') && l.contains('░'), "barre de progression : {l}");
+    }
+
+    #[test]
     fn top_ram_block_sits_between_swap_and_frequency() {
         let h = history();
         h.lock().unwrap().record_top(vec![
             crate::sensors::ProcessRam { name: "chromium".into(), mb: 812.0, percent: 10.2 },
             crate::sensors::ProcessRam { name: "python3".into(), mb: 90.0, percent: 1.1 },
         ]);
-        let s = screen(&App::new(h, true), 110, 52);
+        let s = screen(&App::new(h, true), 110, 56);
         let row = |t: &str| s.iter().position(|l| l.contains(t)).unwrap_or_else(|| panic!("{t} absent"));
         let (swap, top, freq) = (row("Swap (%)"), row("Top RAM"), row("Fréquence (MHz)"));
         assert!(swap < top && top < freq, "ordre : {swap} {top} {freq}");
@@ -317,7 +367,7 @@ mod tests {
     #[test]
     fn header_footer_big_digits_and_curve_are_drawn() {
         let app = App::new(history(), true);
-        let s = screen(&app, 110, 52).join("\n");
+        let s = screen(&app, 110, 56).join("\n");
         assert!(s.contains("RPi Monitor") && s.contains("DEMO"));
         assert!(s.contains("Quitter") && s.contains("Pause") && s.contains("Reset") && s.contains("Fenêtre"));
         assert!(s.contains("┏━┓")); // gros chiffres

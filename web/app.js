@@ -31,10 +31,16 @@ function fmtValue(v, m) {
   return m.decimals === 0 ? String(Math.ceil(v)) : Number(v).toFixed(m.decimals);
 }
 
-/** Mémoire : Mo sous 1 Go, sinon Go à une décimale. */
+/** Taille : Mo sous 1 Go, Go sous 1 To, sinon To (une décimale). */
 function fmtMemory(mb) {
   if (mb === null || mb === undefined || Number.isNaN(mb)) return '--';
-  return mb < 1024 ? Math.ceil(mb) + ' Mo' : (mb / 1024).toFixed(1) + ' Go';
+  if (mb < 1024) return Math.ceil(mb) + ' Mo';
+  return mb >= 1024 * 1024 ? (mb / 1024 / 1024).toFixed(1) + ' To' : (mb / 1024).toFixed(1) + ' Go';
+}
+
+/** Couleur de la barre d'un disque : alerte dès 80 % d'occupation, critique dès 90 %. */
+function diskLevel(percent) {
+  return percent >= 90 ? 'bad' : percent >= 80 ? 'warn' : '';
 }
 
 function fmt(v, decimals) {
@@ -236,6 +242,7 @@ function eventList(events, period) {
 
 const cards = {};
 let topRam;
+let disks;
 
 function ensureCards() {
   const main = document.getElementById('app');
@@ -255,10 +262,26 @@ function ensureCards() {
     const el = h('section', { class: 'card', id: 'card-' + m.id }, h('h2', null, c.title, c.info), h('div', { class: 'head' }, c.value, c.stats), c.detail, c.legend, c.chart, c.axis, c.events);
     cards[m.id] = c;
     main.append(el);
+    if (m.id === 'cpu') {
+      disks = h('ul', { class: 'disks' });
+      main.append(h('section', { class: 'card', id: 'card-disks' }, h('h2', null, 'Disques'), disks));
+    }
     if (m.id === 'swap') {
       topRam = h('ul', { class: 'top-ram' });
       main.append(h('section', { class: 'card', id: 'card-top-ram' }, h('h2', null, 'Top RAM (applications)'), topRam));
     }
+  }
+}
+
+function renderDisks(list) {
+  disks.textContent = '';
+  if (!list || !list.length) return disks.append(h('li', { class: 'none' }, 'indisponible'));
+  for (const d of list) {
+    const pct = Math.min(100, Math.max(0, d.percent));
+    disks.append(h('li', null,
+      h('div', { class: 'row' }, h('span', { class: 'name' }, d.mount), h('span', { class: 'size' }, fmtMemory(d.used_mb) + ' / ' + fmtMemory(d.total_mb) + ' · ' + Math.ceil(d.percent) + ' %')),
+      h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(pct), 'aria-label': d.mount },
+        h('div', { class: 'fill ' + diskLevel(d.percent), style: 'width:' + pct.toFixed(1) + '%' }))));
   }
 }
 
@@ -281,6 +304,7 @@ function render() {
   const now = cur ? cur.ts : Date.now() / 1000;
   document.getElementById('demo').hidden = !(cur && cur.demo);
   renderTopRam(cur && cur.top_ram);
+  renderDisks(cur && cur.disks);
   for (const m of METRICS) {
     const c = cards[m.id];
     const info = cur && cur.metrics[m.id];
@@ -455,7 +479,7 @@ function start() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { fmtMemory, coreColor, coreLabel, nearestPoint, fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
+  module.exports = { diskLevel, fmtMemory, coreColor, coreLabel, nearestPoint, fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
 } else {
   start();
 }

@@ -85,3 +85,13 @@ main.stale .card { opacity: .6; }
 .top-ram .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-ram .pct { min-width: 56px; text-align: right; color: var(--muted, inherit); }
 .top-ram .none { color: var(--muted, inherit); }
+
+.disks { list-style: none; margin: 0; padding: 0; }
+.disks li { padding: 6px 0; }
+.disks .row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.disks .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disks .size, .disks .none { color: var(--muted); white-space: nowrap; }
+.disks .meter { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.disks .fill { height: 100%; background: var(--ok); }
+.disks .fill.warn { background: var(--warn); }
+.disks .fill.bad { background: var(--bad); }

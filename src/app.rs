@@ -1,7 +1,7 @@
 //! État de l'application et mise en forme des indicateurs (pur : sans terminal).
 
 use crate::collector::{History, Key};
-use crate::sensors::{ProcessRam, Throttle};
+use crate::sensors::{DiskUsage, ProcessRam, Throttle};
 use ratatui::style::Color;
 use std::sync::{Arc, Mutex};
 
@@ -23,10 +23,12 @@ const fn spec(key: Key, title: &'static str, unit: &'static str, color: Color) -
     Spec { key, title, unit, color, decimals: 1, fixed: None, min_span: 10.0, bars: false, step_s: 1.0, compact: false }
 }
 
-/// Mémoire affichée : Mo sous 1 Go, sinon Go (arrondi au supérieur, comme les autres valeurs).
+/// Taille affichée : Mo sous 1 Go, Go sous 1 To, sinon To (arrondi au supérieur, comme les autres valeurs).
 pub fn fmt_memory(mb: f64) -> String {
     if mb < 1024.0 {
         format!("{} Mo", mb.ceil())
+    } else if mb >= 1024.0 * 1024.0 {
+        format!("{:.1} To", mb / 1024.0 / 1024.0)
     } else {
         format!("{:.1} Go", mb / 1024.0)
     }
@@ -121,11 +123,12 @@ pub struct App {
     quit: bool,
     views: Vec<LaneView>,
     top_ram: Vec<ProcessRam>,
+    disks: Vec<DiskUsage>,
 }
 
 impl App {
     pub fn new(history: Arc<Mutex<History>>, demo: bool) -> Self {
-        let mut app = Self { history, demo, paused: false, window_idx: INITIAL_WINDOW, quit: false, views: vec![], top_ram: vec![] };
+        let mut app = Self { history, demo, paused: false, window_idx: INITIAL_WINDOW, quit: false, views: vec![], top_ram: vec![], disks: vec![] };
         app.rebuild();
         app
     }
@@ -162,10 +165,15 @@ impl App {
         let h = self.history.lock().unwrap_or_else(|e| e.into_inner());
         self.views = SPECS.iter().map(|s| lane_view(s, &h, w)).collect();
         self.top_ram = h.top_ram().to_vec();
+        self.disks = h.disks().to_vec();
     }
 
     pub fn views(&self) -> &[LaneView] {
         &self.views
+    }
+
+    pub fn disks(&self) -> &[DiskUsage] {
+        &self.disks
     }
 
     pub fn top_ram(&self) -> &[ProcessRam] {
@@ -210,6 +218,11 @@ mod tests {
 
     fn cpu(h: &Arc<Mutex<History>>, ts: f64, v: f64) {
         h.lock().unwrap().record_slow(ts, &Readings { cpu: Some(v), ..Default::default() });
+    }
+
+    #[test]
+    fn sizes_switch_to_to_from_1024_go() {
+        assert_eq!(fmt_memory(1536.0 * 1024.0), "1.5 To");
     }
 
     #[test]

@@ -139,7 +139,12 @@ fn current(h: &History, info: &Info, now: f64) -> Value {
         .iter()
         .map(|p| json!({ "name": p.name, "mb": round2(p.mb), "percent": round2(p.percent) }))
         .collect();
-    json!({ "ts": now, "demo": info.demo, "metrics": metrics, "top_ram": top_ram })
+    let disks: Vec<Value> = h
+        .disks()
+        .iter()
+        .map(|d| json!({ "mount": d.mount, "total_mb": round2(d.total_mb), "used_mb": round2(d.used_mb), "percent": round2(d.percent()) }))
+        .collect();
+    json!({ "ts": now, "demo": info.demo, "metrics": metrics, "top_ram": top_ram, "disks": disks })
 }
 
 fn history(h: &History, ks: &[Key], period_s: f64, max_points: usize, now: f64) -> Value {
@@ -269,6 +274,16 @@ mod tests {
         h.record_top(vec![crate::sensors::ProcessRam { name: "chromium".into(), mb: 512.456, percent: 6.789 }]);
         let (_, v) = get(&Mutex::new(h), "/api/v1/metrics/current", 1.0);
         assert_eq!(v["top_ram"][0], json!({ "name": "chromium", "mb": 512.46, "percent": 6.79 }));
+    }
+
+    #[test]
+    fn current_lists_the_mount_points_with_their_usage() {
+        let (_, none) = get(&Mutex::new(History::new()), "/api/v1/metrics/current", 1.0);
+        assert_eq!(none["disks"], json!([]));
+        let mut h = History::new();
+        h.record_disks(vec![crate::sensors::DiskUsage { mount: "/media/disk1".into(), total_mb: 1000.0, used_mb: 333.333 }]);
+        let (_, v) = get(&Mutex::new(h), "/api/v1/metrics/current", 1.0);
+        assert_eq!(v["disks"][0], json!({ "mount": "/media/disk1", "total_mb": 1000.0, "used_mb": 333.33, "percent": 33.33 }));
     }
 
     #[test]

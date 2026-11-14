@@ -45,6 +45,12 @@ const tests = {
     assert.equal(t.fmtMemory(1536), '1.5 Go');
     assert.equal(t.fmtMemory(null), '--');
   },
+  'diskLevel : normal, alerte dès 80 %, critique dès 90 %'() {
+    assert.deepEqual([50, 80, 89.9, 90, 100].map(t.diskLevel), ['', 'warn', 'warn', 'bad', 'bad']);
+  },
+  'fmtMemory : To à partir de 1024 Go'() {
+    assert.equal(t.fmtMemory(1536 * 1024), '1.5 To');
+  },
   'segments : un trou coupe la courbe au lieu de la relier'() {
     const pts = [[0, 1, 1, 1], [10, 2, 2, 2], [20, 3, 3, 3], [5000, 4, 4, 4], [5010, 5, 5, 5]];
     const segs = t.segments(pts, 10);

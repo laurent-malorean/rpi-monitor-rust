@@ -23,6 +23,24 @@ impl FanReading {
     }
 }
 
+/// Occupation d'un point de montage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiskUsage {
+    pub mount: String,
+    pub total_mb: f64,
+    pub used_mb: f64,
+}
+
+impl DiskUsage {
+    pub fn percent(&self) -> f64 {
+        if self.total_mb > 0.0 {
+            self.used_mb / self.total_mb * 100.0
+        } else {
+            0.0
+        }
+    }
+}
+
 /// RAM occupée par les processus d'un même nom (somme de leur mémoire résidente).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessRam {
@@ -64,6 +82,8 @@ pub trait Sensors: Send {
     fn swap_percent(&mut self) -> Option<f64> { None }
     /// Les `n` applications qui occupent le plus de RAM ; vide = indisponible.
     fn top_ram(&mut self, _n: usize) -> Vec<ProcessRam> { vec![] }
+    /// Points de montage des disques ; vide = indisponible.
+    fn disks(&mut self) -> Vec<DiskUsage> { vec![] }
     fn temperature_c(&mut self) -> Option<f64>;
     fn power_w(&mut self) -> Option<f64> { None }
     fn throttled(&mut self) -> Option<u32> { None }

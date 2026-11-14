@@ -1,6 +1,6 @@
 //! Capteurs synthétiques pour développer hors Raspberry Pi (`--demo`).
 
-use super::{FanReading, ProcessRam, Sensors};
+use super::{DiskUsage, FanReading, ProcessRam, Sensors};
 
 const LOAD_PERIOD_S: f64 = 240.0; // cycle charge faible / forte : ventilateur et throttling se déclenchent
 const FAN_ON_C: f64 = 52.0;
@@ -64,6 +64,14 @@ impl Sensors for DemoSensors {
     fn swap_percent(&mut self) -> Option<f64> {
         self.swap = (self.swap + self.noise() * 0.3).clamp(0.0, 60.0);
         Some(self.swap)
+    }
+
+    fn disks(&mut self) -> Vec<DiskUsage> {
+        // (point de montage, taille Mo, occupation %) : le dernier disque est presque plein
+        [("/", 59_000.0, 21.0), ("/media/disk1", 953_000.0, 55.0), ("/media/disk2", 3_815_000.0, 91.0)]
+            .into_iter()
+            .map(|(mount, total_mb, pct)| DiskUsage { mount: mount.into(), total_mb, used_mb: total_mb * pct / 100.0 })
+            .collect()
     }
 
     fn top_ram(&mut self, n: usize) -> Vec<ProcessRam> {
@@ -134,6 +142,13 @@ mod tests {
                 fan: s.fan().unwrap(),
             })
             .collect()
+    }
+
+    #[test]
+    fn demo_has_three_mount_points_with_used_below_total() {
+        let disks = DemoSensors::new(1).disks();
+        assert_eq!(disks.iter().map(|d| d.mount.as_str()).collect::<Vec<_>>(), ["/", "/media/disk1", "/media/disk2"]);
+        assert!(disks.iter().all(|d| d.used_mb > 0.0 && d.used_mb < d.total_mb));
     }
 
     #[test]

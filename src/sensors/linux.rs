@@ -1,11 +1,27 @@
 //! Capteurs Raspberry Pi / Linux : `/proc`, `/sys`, `vcgencmd`. Compilé sur toutes les
 //! plateformes pour que les tests tournent aussi sur Mac.
 
-use super::{FanReading, ProcessRam, Sensors};
+use super::{DiskUsage, FanReading, ProcessRam, Sensors};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Sortie de `df -kP` : les disques réels (`/dev/...`, hors loop), une seule fois chacun.
+pub fn parse_df(text: &str) -> Vec<DiskUsage> {
+    let mut seen: Vec<&str> = vec![];
+    let mut out = vec![];
+    for line in text.lines().skip(1) {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        if f.len() < 6 || !f[0].starts_with("/dev/") || f[0].starts_with("/dev/loop") || seen.contains(&f[0]) {
+            continue;
+        }
+        let (Ok(total), Ok(used)) = (f[1].parse::<f64>(), f[2].parse::<f64>()) else { continue };
+        seen.push(f[0]);
+        out.push(DiskUsage { mount: f[5..].join(" "), total_mb: total / 1024.0, used_mb: used / 1024.0 });
+    }
+    out
+}
 
 /// Puissance estimée (W) : somme tension x courant des rails ayant les deux mesures.
 pub fn parse_pmic_power(text: &str) -> Option<f64> {
@@ -197,6 +213,16 @@ impl Sensors for LinuxSensors {
         (total > 0.0).then(|| (total - free) / total * 100.0)
     }
 
+    fn disks(&mut self) -> Vec<DiskUsage> {
+        if !self.real {
+            return vec![];
+        }
+        match Command::new("df").arg("-kP").output() {
+            Ok(out) if out.status.success() => parse_df(&String::from_utf8_lossy(&out.stdout)),
+            _ => vec![],
+        }
+    }
+
     fn top_ram(&mut self, n: usize) -> Vec<ProcessRam> {
         let Some(total) = fs::read_to_string(self.proc.join("meminfo")).ok().and_then(|t| meminfo_field(&t, "MemTotal:")) else {
             return vec![];
@@ -373,6 +399,21 @@ mod tests {
         assert_eq!(all, ["foo", "bar"]);
         let none = tmpdir("topram-none");
         assert!(LinuxSensors::with_roots(&none, &none).top_ram(5).is_empty());
+    }
+
+    #[test]
+    fn parse_df_keeps_real_disks_once_with_sizes_in_mb() {
+        let df = "Filesystem     1024-blocks     Used Available Capacity Mounted on
+/dev/mmcblk0p2    61000000 12800000  45000000      23% /
+tmpfs              4000000        0   4000000       0% /dev/shm
+/dev/sda1        976000000 500000000 476000000     52% /media/disk 1
+/dev/sda1        976000000 500000000 476000000     52% /mnt/bind
+/dev/loop3          100000   100000         0     100% /snap/core
+";
+        let disks = parse_df(df);
+        assert_eq!(disks.iter().map(|d| d.mount.as_str()).collect::<Vec<_>>(), ["/", "/media/disk 1"]);
+        assert_eq!((disks[0].total_mb, disks[0].used_mb), (61000000.0 / 1024.0, 12800000.0 / 1024.0));
+        assert!(parse_df("").is_empty() && parse_df("n'importe quoi").is_empty());
     }
 
     #[test]
