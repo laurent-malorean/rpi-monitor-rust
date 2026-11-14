@@ -79,3 +79,9 @@ main.stale .card { opacity: .6; }
 .error { color: var(--bad); min-height: 1.4em; margin: 0; font-size: 13px; }
 [hidden] { display: none !important; }
 @media (max-width: 520px) { .bar { padding: 8px 12px; } main { padding: 8px 12px 20px; gap: 10px; } }
+
+.top-ram { list-style: none; margin: 0; padding: 0; }
+.top-ram li { display: flex; gap: 12px; padding: 4px 0; align-items: baseline; }
+.top-ram .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-ram .pct { min-width: 56px; text-align: right; color: var(--muted, inherit); }
+.top-ram .none { color: var(--muted, inherit); }

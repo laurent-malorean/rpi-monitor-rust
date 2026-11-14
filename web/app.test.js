@@ -34,6 +34,11 @@ const tests = {
     assert.equal(t.nearestPoint(pts, 2500, 10), null, 'au milieu d un trou');
     assert.equal(t.nearestPoint([], 5, 10), null);
   },
+  'fmtMemory : Mo en dessous de 1 Go, Go avec une décimale au-dessus'() {
+    assert.equal(t.fmtMemory(512.4), '513 Mo');
+    assert.equal(t.fmtMemory(1536), '1.5 Go');
+    assert.equal(t.fmtMemory(null), '--');
+  },
   'segments : un trou coupe la courbe au lieu de la relier'() {
     const pts = [[0, 1, 1, 1], [10, 2, 2, 2], [20, 3, 3, 3], [5000, 4, 4, 4], [5010, 5, 5, 5]];
     const segs = t.segments(pts, 10);

@@ -134,7 +134,12 @@ fn current(h: &History, info: &Info, now: f64) -> Value {
         }
         metrics.insert(id.into(), m);
     }
-    json!({ "ts": now, "demo": info.demo, "metrics": metrics })
+    let top_ram: Vec<Value> = h
+        .top_ram()
+        .iter()
+        .map(|p| json!({ "name": p.name, "mb": round2(p.mb), "percent": round2(p.percent) }))
+        .collect();
+    json!({ "ts": now, "demo": info.demo, "metrics": metrics, "top_ram": top_ram })
 }
 
 fn history(h: &History, ks: &[Key], period_s: f64, max_points: usize, now: f64) -> Value {
@@ -254,6 +259,16 @@ mod tests {
         assert_eq!((cpu["label"].as_str(), cpu["unit"].as_str(), cpu["value"].as_f64()), (Some("CPU"), Some("%"), Some(39.0)));
         assert!(v["metrics"]["ram"]["value"].is_null()); // jamais 0
         assert_eq!(v["metrics"].as_object().unwrap().len(), 8);
+    }
+
+    #[test]
+    fn current_lists_the_top_ram_processes() {
+        let mut h = History::new();
+        let (_, none) = get(&Mutex::new(History::new()), "/api/v1/metrics/current", 1.0);
+        assert_eq!(none["top_ram"], json!([]));
+        h.record_top(vec![crate::sensors::ProcessRam { name: "chromium".into(), mb: 512.456, percent: 6.789 }]);
+        let (_, v) = get(&Mutex::new(h), "/api/v1/metrics/current", 1.0);
+        assert_eq!(v["top_ram"][0], json!({ "name": "chromium", "mb": 512.46, "percent": 6.79 }));
     }
 
     #[test]

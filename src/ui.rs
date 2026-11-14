@@ -1,6 +1,6 @@
 //! Dessin ratatui : en-tête, huit lignes empilées (valeurs à gauche, courbe à droite), pied de page.
 
-use crate::app::{App, LaneView, Spec, SPECS};
+use crate::app::{fmt_memory, App, LaneView, Spec, SPECS};
 use crate::collector::Key;
 use crate::render::{auto_scale, big_digits, merge_braille, render_line, render_rows, resample};
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
@@ -11,6 +11,7 @@ use ratatui::Frame;
 
 pub const AXIS_W: usize = 6;
 const COMPACT_H: u16 = 5;
+const TOP_H: u16 = 6; // titre + 5 applications
 
 /// Lignes du graphique d'un indicateur (axe + tracé), `w` x `h` cellules.
 pub fn chart_lines(spec: &Spec, values: &[f64], window_s: f64, w: usize, h: usize) -> Vec<Line<'static>> {
@@ -114,12 +115,15 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // lignes à hauteur variable : répartition cumulée ; la ligne compacte garde 5 lignes
     let compact = SPECS.iter().filter(|s| s.compact).count();
-    let flex_h = body.height.saturating_sub(COMPACT_H * compact as u16);
+    let flex_h = body.height.saturating_sub(COMPACT_H * compact as u16 + TOP_H);
     let mut flex = split_heights(flex_h, SPECS.len() - compact).into_iter();
-    let constraints: Vec<Constraint> = SPECS
-        .iter()
-        .map(|s| Constraint::Length(if s.compact { COMPACT_H } else { flex.next().unwrap_or(0) }))
-        .collect();
+    let mut constraints: Vec<Constraint> = vec![];
+    for s in SPECS.iter() {
+        constraints.push(Constraint::Length(if s.compact { COMPACT_H } else { flex.next().unwrap_or(0) }));
+        if s.key == Key::Swap {
+            constraints.push(Constraint::Length(TOP_H));
+        }
+    }
     let lanes = Layout::vertical(constraints).split(body);
 
     let title = format!("RPi Monitor — {}", app.subtitle());
@@ -127,10 +131,26 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Paragraph::new(title).alignment(Alignment::Center).style(Style::new().fg(Color::White).bg(BAR_BG)),
         header,
     );
-    for ((spec, view), area) in SPECS.iter().zip(app.views()).zip(lanes.iter()) {
-        draw_lane(frame, spec, view, *area);
+    let mut areas = lanes.iter();
+    for (spec, view) in SPECS.iter().zip(app.views()) {
+        draw_lane(frame, spec, view, *areas.next().unwrap_or(&Rect::default()));
+        if spec.key == Key::Swap {
+            draw_top_ram(frame, app, *areas.next().unwrap_or(&Rect::default()));
+        }
     }
     frame.render_widget(footer(), footer_area);
+}
+
+fn draw_top_ram(frame: &mut Frame, app: &App, area: Rect) {
+    let dim = Style::new().add_modifier(Modifier::DIM);
+    let mut lines = vec![Line::from(Span::styled("Top RAM (applications)", Style::new().add_modifier(Modifier::BOLD)))];
+    if app.top_ram().is_empty() {
+        lines.push(Line::styled("indisponible", dim));
+    }
+    for p in app.top_ram() {
+        lines.push(Line::from(format!("{:<24} {:>8} {:>7}", p.name, fmt_memory(p.mb), format!("{:.1} %", p.percent))));
+    }
+    frame.render_widget(Paragraph::new(lines), area.inner(Margin::new(1, 0)));
 }
 
 fn draw_lane(frame: &mut Frame, spec: &Spec, view: &LaneView, area: Rect) {
@@ -270,7 +290,7 @@ mod tests {
     #[test]
     fn all_eight_indicators_are_stacked_in_order() {
         let app = App::new(history(), true);
-        let s = screen(&app, 110, 45);
+        let s = screen(&app, 110, 52);
         let rows: Vec<usize> = ["CPU (%)", "RAM (%)", "Swap (%)", "Fréquence (MHz)", "Consommation (W)", "Température (°C)",
             "Ventilateur (tr/min)", "Throttling (flags)"]
             .iter()
@@ -280,9 +300,24 @@ mod tests {
     }
 
     #[test]
+    fn top_ram_block_sits_between_swap_and_frequency() {
+        let h = history();
+        h.lock().unwrap().record_top(vec![
+            crate::sensors::ProcessRam { name: "chromium".into(), mb: 812.0, percent: 10.2 },
+            crate::sensors::ProcessRam { name: "python3".into(), mb: 90.0, percent: 1.1 },
+        ]);
+        let s = screen(&App::new(h, true), 110, 52);
+        let row = |t: &str| s.iter().position(|l| l.contains(t)).unwrap_or_else(|| panic!("{t} absent"));
+        let (swap, top, freq) = (row("Swap (%)"), row("Top RAM"), row("Fréquence (MHz)"));
+        assert!(swap < top && top < freq, "ordre : {swap} {top} {freq}");
+        assert!(s[top + 1].contains("chromium") && s[top + 1].contains("812 Mo") && s[top + 1].contains("10.2 %"));
+        assert!(s[top + 2].contains("python3"));
+    }
+
+    #[test]
     fn header_footer_big_digits_and_curve_are_drawn() {
         let app = App::new(history(), true);
-        let s = screen(&app, 110, 45).join("\n");
+        let s = screen(&app, 110, 52).join("\n");
         assert!(s.contains("RPi Monitor") && s.contains("DEMO"));
         assert!(s.contains("Quitter") && s.contains("Pause") && s.contains("Reset") && s.contains("Fenêtre"));
         assert!(s.contains("┏━┓")); // gros chiffres

@@ -31,6 +31,12 @@ function fmtValue(v, m) {
   return m.decimals === 0 ? String(Math.ceil(v)) : Number(v).toFixed(m.decimals);
 }
 
+/** Mémoire : Mo sous 1 Go, sinon Go à une décimale. */
+function fmtMemory(mb) {
+  if (mb === null || mb === undefined || Number.isNaN(mb)) return '--';
+  return mb < 1024 ? Math.ceil(mb) + ' Mo' : (mb / 1024).toFixed(1) + ' Go';
+}
+
 function fmt(v, decimals) {
   return v === null || v === undefined || Number.isNaN(v) ? '--' : Number(v).toFixed(decimals);
 }
@@ -229,6 +235,7 @@ function eventList(events, period) {
 }
 
 const cards = {};
+let topRam;
 
 function ensureCards() {
   const main = document.getElementById('app');
@@ -248,7 +255,17 @@ function ensureCards() {
     const el = h('section', { class: 'card', id: 'card-' + m.id }, h('h2', null, c.title, c.info), h('div', { class: 'head' }, c.value, c.stats), c.detail, c.legend, c.chart, c.axis, c.events);
     cards[m.id] = c;
     main.append(el);
+    if (m.id === 'swap') {
+      topRam = h('ul', { class: 'top-ram' });
+      main.append(h('section', { class: 'card', id: 'card-top-ram' }, h('h2', null, 'Top RAM (applications)'), topRam));
+    }
   }
+}
+
+function renderTopRam(list) {
+  topRam.textContent = '';
+  if (!list || !list.length) return topRam.append(h('li', { class: 'none' }, 'indisponible'));
+  for (const p of list) topRam.append(h('li', null, h('span', { class: 'name' }, p.name), h('b', null, fmtMemory(p.mb)), h('span', { class: 'pct' }, fmt(p.percent, 1) + ' %')));
 }
 
 function setValue(c, text, unit, available) {
@@ -263,6 +280,7 @@ function render() {
   const cur = state.current;
   const now = cur ? cur.ts : Date.now() / 1000;
   document.getElementById('demo').hidden = !(cur && cur.demo);
+  renderTopRam(cur && cur.top_ram);
   for (const m of METRICS) {
     const c = cards[m.id];
     const info = cur && cur.metrics[m.id];
@@ -437,7 +455,7 @@ function start() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { coreColor, coreLabel, nearestPoint, fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
+  module.exports = { fmtMemory, coreColor, coreLabel, nearestPoint, fmtValue, fmt, segments, extent, isConnectionLost, formatDuration, pathFor, eventLines, PERIODS, DEFAULT_PERIOD, METRICS };
 } else {
   start();
 }

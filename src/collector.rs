@@ -3,7 +3,7 @@
 
 use crate::archive::{Point, Series};
 use crate::history::{BucketSeries, RingBuffer, Stats};
-use crate::sensors::{parse_throttled, FanReading, Sensors, Throttle};
+use crate::sensors::{parse_throttled, FanReading, ProcessRam, Sensors, Throttle};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -14,6 +14,8 @@ pub const HISTORY_S: usize = 30 * 60;
 const BUCKET_S: f64 = 10.0;
 const FAST: Duration = Duration::from_millis(500); // ventilateur
 const SLOW_EVERY: u32 = 2; // autres métriques : 1 s
+const TOP_EVERY: u32 = 10; // applications gourmandes en RAM : 5 s
+const TOP_N: usize = 5;
 pub const ARCHIVE_S: f64 = 48.0 * 3600.0; // historique long
 const ARCHIVE_STEP_S: f64 = 10.0;
 pub const MAX_CORES: usize = 64;
@@ -82,6 +84,7 @@ pub struct History {
     fan_last: Option<FanReading>,
     throttle_last: Option<Throttle>,
     cores_last: Vec<Option<f64>>,
+    top_ram: Vec<ProcessRam>, // dernier relevé, sans historique
     archive: [Series; 8], // 48 h horodatées, indexées comme `Key::ALL`
     cores: Vec<Series>,   // 48 h par cœur de CPU, créées au fur et à mesure
 }
@@ -108,6 +111,7 @@ impl History {
             fan_last: None,
             throttle_last: None,
             cores_last: vec![],
+            top_ram: vec![],
             archive: std::array::from_fn(|_| Series::new(ARCHIVE_STEP_S, ARCHIVE_S)),
             cores: vec![],
         }
@@ -118,6 +122,14 @@ impl History {
         self.fan.add(ts, active);
         self.archive[Key::Fan.index()].add(ts, active.map(f64::from));
         self.fan_last = fan;
+    }
+
+    pub fn record_top(&mut self, top: Vec<ProcessRam>) {
+        self.top_ram = top;
+    }
+
+    pub fn top_ram(&self) -> &[ProcessRam] {
+        &self.top_ram
     }
 
     pub fn record_slow(&mut self, ts: f64, r: &Readings) {
@@ -263,6 +275,10 @@ fn run(mut sensors: Box<dyn Sensors>, history: Arc<Mutex<History>>, stop: Receiv
             };
             lock(&history).record_slow(ts, &r);
         }
+        if tick.is_multiple_of(TOP_EVERY) {
+            let top = catch_unwind(AssertUnwindSafe(|| sensors.top_ram(TOP_N))).unwrap_or_default();
+            lock(&history).record_top(top);
+        }
         tick += 1;
         // horloge monotone : pas de dérive cumulée
         let wait = (start + FAST * tick).saturating_duration_since(Instant::now());
@@ -401,6 +417,17 @@ mod tests {
         assert_eq!(h.archive_points(Key::Fan, None)[0].mean, 0.5);
         h.record_slow(101.0, &slow(None, Some(crate::sensors::parse_throttled(0x4))));
         assert_eq!(h.archive_points(Key::Throttle, None)[0].mean, 1.0);
+    }
+
+    #[test]
+    fn top_ram_keeps_the_latest_list_and_survives_reset() {
+        let mut h = History::new();
+        assert!(h.top_ram().is_empty());
+        let p = |n: &str| crate::sensors::ProcessRam { name: n.into(), mb: 10.0, percent: 1.0 };
+        h.record_top(vec![p("a")]);
+        h.record_top(vec![p("b"), p("c")]);
+        h.reset();
+        assert_eq!(h.top_ram().iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["b", "c"]);
     }
 
     #[test]

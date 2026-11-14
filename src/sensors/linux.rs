@@ -1,7 +1,7 @@
 //! Capteurs Raspberry Pi / Linux : `/proc`, `/sys`, `vcgencmd`. Compilé sur toutes les
 //! plateformes pour que les tests tournent aussi sur Mac.
 
-use super::{FanReading, Sensors};
+use super::{FanReading, ProcessRam, Sensors};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -197,6 +197,30 @@ impl Sensors for LinuxSensors {
         (total > 0.0).then(|| (total - free) / total * 100.0)
     }
 
+    fn top_ram(&mut self, n: usize) -> Vec<ProcessRam> {
+        let Some(total) = fs::read_to_string(self.proc.join("meminfo")).ok().and_then(|t| meminfo_field(&t, "MemTotal:")) else {
+            return vec![];
+        };
+        let Ok(entries) = fs::read_dir(&self.proc) else { return vec![] };
+        let mut by_name: HashMap<String, f64> = HashMap::new();
+        for e in entries.flatten() {
+            if !e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit()) {
+                continue;
+            }
+            let Ok(status) = fs::read_to_string(e.path().join("status")) else { continue };
+            let name = status.lines().find_map(|l| l.strip_prefix("Name:")).map(|n| n.trim().to_string());
+            if let (Some(name), Some(kb)) = (name, meminfo_field(&status, "VmRSS:")) {
+                *by_name.entry(name).or_default() += kb;
+            }
+        }
+        let mut top: Vec<(String, f64)> = by_name.into_iter().collect();
+        top.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        top.into_iter()
+            .take(n)
+            .map(|(name, kb)| ProcessRam { name, mb: kb / 1024.0, percent: kb / total * 100.0 })
+            .collect()
+    }
+
     fn temperature_c(&mut self) -> Option<f64> {
         let v = read_int(&self.sys.join("class/thermal/thermal_zone0/temp"))
             .or_else(|| read_int(&self.temp_hwmon.as_ref()?.join("temp1_input")))?;
@@ -328,6 +352,27 @@ mod tests {
         assert_eq!(s.swap_percent(), Some(75.0));
         write(&d.join("meminfo"), "MemTotal: 1000 kB\nMemAvailable: 250 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n");
         assert_eq!(s.swap_percent(), None); // pas de swap : indisponible, jamais 0
+    }
+
+    #[test]
+    fn top_ram_groups_processes_by_name_and_sorts_by_ram() {
+        let d = tmpdir("topram");
+        write(&d.join("meminfo"), "MemTotal: 1000000 kB\nMemAvailable: 500000 kB\n");
+        write(&d.join("10/status"), "Name:\tfoo\nVmRSS:\t  200000 kB\n");
+        write(&d.join("11/status"), "Name:\tfoo\nVmRSS:\t  100000 kB\n");
+        write(&d.join("12/status"), "Name:\tbar\nVmRSS:\t   50000 kB\n");
+        write(&d.join("13/status"), "Name:\tkthreadd\n"); // thread noyau : pas de VmRSS
+        write(&d.join("self/status"), "Name:\tnope\nVmRSS:\t 999999 kB\n"); // pas un pid
+        let mut s = LinuxSensors::with_roots(&d, &d);
+        let top = s.top_ram(1);
+        assert_eq!(top.len(), 1);
+        assert_eq!(top[0].name, "foo");
+        assert!((top[0].mb - 300000.0 / 1024.0).abs() < 1e-9);
+        assert!((top[0].percent - 30.0).abs() < 1e-9);
+        let all: Vec<_> = s.top_ram(5).into_iter().map(|p| p.name).collect();
+        assert_eq!(all, ["foo", "bar"]);
+        let none = tmpdir("topram-none");
+        assert!(LinuxSensors::with_roots(&none, &none).top_ram(5).is_empty());
     }
 
     #[test]

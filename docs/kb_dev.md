@@ -8,7 +8,7 @@
 - **Consommation Pi 5** : `vcgencmd pmic_read_adc` (lecture seule, sans sudo) ; appariement des rails `_A`/`_V` par nom, `EXT5V_V` exclu car sans courant. Comme le throttling, appelé seulement sur le vrai `/sys`.
 - **Graphiques / échelle auto** : une courbe pleine (aires) sur une échelle automatique exagère les valeurs (47 °C paraît « presque plein ») ; préférer une ligne.
 - **Lignes compactes** : une ligne binaire (throttling) n'a pas besoin du gros chiffre ; `Spec.compact` la ramène à 5 lignes pour que 6 indicateurs tiennent dans ~35 lignes de terminal.
-- **Hauteur de terminal** : 8 indicateurs demandent ~45 lignes ; en dessous, les lignes à gros chiffre se compriment. Ne pas combiner hauteur proportionnelle et minimum sur les lignes empilées (constaté sur le Pi avec Textual) : utiliser des `Constraint::Min`/`Length` explicites dans ratatui.
+- **Hauteur de terminal** : 8 indicateurs + le Top RAM demandent ~50 lignes ; en dessous, les lignes à gros chiffre se compriment. Ne pas combiner hauteur proportionnelle et minimum sur les lignes empilées (constaté sur le Pi avec Textual) : utiliser des `Constraint::Min`/`Length` explicites dans ratatui.
 - **Tests UI** : tester le rendu avec `ratatui::backend::TestBackend` à plusieurs hauteurs de terminal, pas seulement une grande.
 - **Rust / portabilité** : remplacer `psutil` par la lecture directe de `/proc/stat` (CPU, deltas), `/proc/meminfo` (`MemAvailable`) et `cpufreq/scaling_cur_freq` ; racines `/sys` et `/proc` injectables pour tester sur Mac avec un faux arbre dans un répertoire temporaire.
 - **Rust / cross-compilation Pi** : dépendances en Rust pur, aucune lib C ; cible `aarch64-unknown-linux-gnu` (Pi 5, OS 64 bits) via `cross` ou `cargo-zigbuild`.

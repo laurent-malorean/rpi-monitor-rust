@@ -23,6 +23,14 @@ impl FanReading {
     }
 }
 
+/// RAM occupée par les processus d'un même nom (somme de leur mémoire résidente).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessRam {
+    pub name: String,
+    pub mb: f64,
+    pub percent: f64, // part de la RAM totale
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Throttle {
     pub now: Vec<&'static str>,        // en cours
@@ -54,6 +62,8 @@ pub trait Sensors: Send {
     fn ram_percent(&mut self) -> Option<f64>;
     /// Part du swap utilisée (%) ; `None` si la machine n'a pas de swap.
     fn swap_percent(&mut self) -> Option<f64> { None }
+    /// Les `n` applications qui occupent le plus de RAM ; vide = indisponible.
+    fn top_ram(&mut self, _n: usize) -> Vec<ProcessRam> { vec![] }
     fn temperature_c(&mut self) -> Option<f64>;
     fn power_w(&mut self) -> Option<f64> { None }
     fn throttled(&mut self) -> Option<u32> { None }

@@ -1,7 +1,7 @@
 //! État de l'application et mise en forme des indicateurs (pur : sans terminal).
 
 use crate::collector::{History, Key};
-use crate::sensors::Throttle;
+use crate::sensors::{ProcessRam, Throttle};
 use ratatui::style::Color;
 use std::sync::{Arc, Mutex};
 
@@ -21,6 +21,15 @@ pub struct Spec {
 
 const fn spec(key: Key, title: &'static str, unit: &'static str, color: Color) -> Spec {
     Spec { key, title, unit, color, decimals: 1, fixed: None, min_span: 10.0, bars: false, step_s: 1.0, compact: false }
+}
+
+/// Mémoire affichée : Mo sous 1 Go, sinon Go (arrondi au supérieur, comme les autres valeurs).
+pub fn fmt_memory(mb: f64) -> String {
+    if mb < 1024.0 {
+        format!("{} Mo", mb.ceil())
+    } else {
+        format!("{:.1} Go", mb / 1024.0)
+    }
 }
 
 pub const SPECS: [Spec; 8] = [
@@ -111,11 +120,12 @@ pub struct App {
     window_idx: usize,
     quit: bool,
     views: Vec<LaneView>,
+    top_ram: Vec<ProcessRam>,
 }
 
 impl App {
     pub fn new(history: Arc<Mutex<History>>, demo: bool) -> Self {
-        let mut app = Self { history, demo, paused: false, window_idx: INITIAL_WINDOW, quit: false, views: vec![] };
+        let mut app = Self { history, demo, paused: false, window_idx: INITIAL_WINDOW, quit: false, views: vec![], top_ram: vec![] };
         app.rebuild();
         app
     }
@@ -151,10 +161,15 @@ impl App {
         let w = self.window_s();
         let h = self.history.lock().unwrap_or_else(|e| e.into_inner());
         self.views = SPECS.iter().map(|s| lane_view(s, &h, w)).collect();
+        self.top_ram = h.top_ram().to_vec();
     }
 
     pub fn views(&self) -> &[LaneView] {
         &self.views
+    }
+
+    pub fn top_ram(&self) -> &[ProcessRam] {
+        &self.top_ram
     }
 
     pub fn paused(&self) -> bool {
@@ -195,6 +210,11 @@ mod tests {
 
     fn cpu(h: &Arc<Mutex<History>>, ts: f64, v: f64) {
         h.lock().unwrap().record_slow(ts, &Readings { cpu: Some(v), ..Default::default() });
+    }
+
+    #[test]
+    fn memory_is_shown_in_mo_below_one_go() {
+        assert_eq!((fmt_memory(511.2).as_str(), fmt_memory(1536.0).as_str()), ("512 Mo", "1.5 Go"));
     }
 
     #[test]

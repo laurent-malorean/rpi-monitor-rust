@@ -1,6 +1,6 @@
 //! Capteurs synthétiques pour développer hors Raspberry Pi (`--demo`).
 
-use super::{FanReading, Sensors};
+use super::{FanReading, ProcessRam, Sensors};
 
 const LOAD_PERIOD_S: f64 = 240.0; // cycle charge faible / forte : ventilateur et throttling se déclenchent
 const FAN_ON_C: f64 = 52.0;
@@ -64,6 +64,22 @@ impl Sensors for DemoSensors {
     fn swap_percent(&mut self) -> Option<f64> {
         self.swap = (self.swap + self.noise() * 0.3).clamp(0.0, 60.0);
         Some(self.swap)
+    }
+
+    fn top_ram(&mut self, n: usize) -> Vec<ProcessRam> {
+        const APPS: [(&str, f64); 6] =
+            [("chromium", 14.0), ("python3", 6.0), ("rpi-monitor", 3.0), ("node", 2.5), ("sshd", 0.6), ("systemd", 0.4)];
+        let total_mb = 8192.0;
+        let mut out: Vec<ProcessRam> = APPS
+            .iter()
+            .map(|&(name, pct)| {
+                let percent = (pct + self.noise() * 0.2).max(0.1);
+                ProcessRam { name: name.into(), mb: percent / 100.0 * total_mb, percent }
+            })
+            .collect();
+        out.sort_by(|a, b| b.mb.total_cmp(&a.mb));
+        out.truncate(n);
+        out
     }
 
     fn temperature_c(&mut self) -> Option<f64> {
