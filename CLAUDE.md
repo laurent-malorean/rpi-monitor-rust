@@ -16,9 +16,10 @@ Répéter ce cycle pour chaque nouvelle fonctionnalité ou correction de bug : j
 
 ## Documentation vivante
 
-À chaque développement, mettre à jour ces deux documents s'ils sont impactés :
+À chaque développement, mettre à jour ces documents s'ils sont impactés :
 
 - `docs/kb_dev.md` — bonnes pratiques détectées au fil des devs (une ligne par entrée, catégorisée, avec contexte/raison).
+- `README.md` — liste des indicateurs, fonctionnalités, API, installation, état du projet (nombre de tests...) : le relire et le corriger à chaque commit qui change une fonctionnalité visible ; ne pas le laisser dériver.
 - `docs/ontology.md` — concepts **métier** uniquement (terme, définition courte, emplacement dans le code). Jamais de concepts d'implémentation (structs, traits, threads, canaux, workers...) : s'ils n'ont de sens que pour quelqu'un qui lit le code, ils vont dans `kb_dev.md`, pas dans `ontology.md`.
 
 Projet petit : rester simple, pas de formalisme lourd.

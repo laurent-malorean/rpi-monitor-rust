@@ -16,15 +16,20 @@ Le code produit par l'IA est donc contrôlé par ses tests et par ces règles, p
 
 ## Ce que fait l'application
 
-Sept indicateurs surveillés :
+Huit indicateurs et deux blocs surveillés, dans cet ordre :
 
-1. **CPU (%)** : charge globale (`/proc/stat`).
-2. **Fréquence (MHz)** : fréquence courante du processeur (`cpufreq`).
-3. **Consommation (W)** : puissance estimée, somme tension × courant des rails du PMIC (`vcgencmd pmic_read_adc`). C'est une estimation, pas la mesure à l'entrée USB-C.
-4. **RAM (%)** : mémoire utilisée (`/proc/meminfo`).
-5. **Température (°C)** : température du processeur.
-6. **Ventilateur** : activité par périodes de 10 s. Une activation d'une seule mesure reste visible.
-7. **Throttling** : sous-tension, fréquence bridée, throttle, limite de température. « En cours » est distingué de « survenu depuis le démarrage ».
+1. **CPU (%)** : charge globale, moyenne des cœurs (`/proc/stat`) ; la courbe montre chaque cœur.
+2. **Disques** *(bloc)* : une barre de progression par point de montage (chemin, occupé / total). Lecture de `df`, toutes les 30 s.
+3. **RAM (%)** : mémoire utilisée, hors cache (`/proc/meminfo`).
+4. **Swap (%)** : part du swap utilisée ; « indisponible » si la machine n'a pas de swap.
+5. **Top RAM** *(bloc)* : les 5 applications qui occupent le plus de mémoire (processus de même nom additionnés), toutes les 5 s.
+6. **Fréquence (MHz)** : fréquence courante du processeur (`cpufreq`).
+7. **Consommation (W)** : puissance estimée, somme tension × courant des rails du PMIC (`vcgencmd pmic_read_adc`). C'est une estimation, pas la mesure à l'entrée USB-C.
+8. **Température (°C)** : température du processeur.
+9. **Ventilateur** : activité par périodes de 10 s. Une activation d'une seule mesure reste visible.
+10. **Throttling** : sous-tension, fréquence bridée, throttle, limite de température. « En cours » est distingué de « survenu depuis le démarrage ».
+
+Les deux blocs (Disques, Top RAM) montrent l'état courant, sans courbe ni historique.
 
 Une mesure absente est affichée `--` (ou « indisponible » sur le Web) et n'est jamais comptée comme zéro. Collecte : ventilateur toutes les 500 ms, le reste toutes les secondes.
 
@@ -40,7 +45,7 @@ Une mesure absente est affichée `--` (ou « indisponible » sur le Web) et n'es
 
 ![Capture de rpi-monitor-rust sur un Raspberry Pi 5](docs/screen.png)
 
-Sept indicateurs empilés : la valeur actuelle en gros à gauche (avec min / max / moyenne), la courbe dans le temps à droite. Pour le CPU, le chiffre est la moyenne et la courbe affiche **un cœur par couleur** (pastilles de légende dans le titre). Elle fonctionne par SSH.
+Les indicateurs sont empilés : la valeur actuelle en gros à gauche (avec min / max / moyenne), la courbe dans le temps à droite. Pour le CPU, le chiffre est la moyenne et la courbe affiche **un cœur par couleur** (pastilles de légende dans le titre). Les blocs Disques et Top RAM s'intercalent aux mêmes places que sur le Web. Il faut un terminal d'environ 55 lignes. Elle fonctionne par SSH.
 
 | Touche | Action |
 |---|---|
@@ -53,9 +58,9 @@ Sept indicateurs empilés : la valeur actuelle en gros à gauche (avec min / max
 
 ![Interface Web de rpi-monitor-rust sur un Raspberry Pi 5 (thème sombre, période 15 min)](docs/screen-web.png)
 
-- Les 8 indicateurs : valeur actuelle, **min / moyenne / max** sur la période, courbe avec la plage min-max, info-bulle au survol.
-- **Disques** : une barre de progression par point de montage (occupé / total), sous le CPU.
-- **Top RAM** : les 5 applications les plus gourmandes en mémoire, sous le swap.
+- Les 8 indicateurs à courbe : valeur actuelle, **min / moyenne / max** sur la période, courbe avec la plage min-max, info-bulle au survol.
+- **Disques** (sous le CPU) : une barre par point de montage, orange dès 80 %, rouge dès 90 %.
+- **Top RAM** (sous le swap) : les 5 applications les plus gourmandes.
 - **CPU par cœur** : le chiffre est la moyenne de tous les cœurs, la courbe affiche **un cœur par couleur** (légende, et détail de chacun dans l'info-bulle).
 - La **version** du service (commit et date de compilation) s'affiche dans l'en-tête, pour savoir quel binaire tourne.
 - **Période au choix** : 15 min, 1 h, 6 h, 24 h, 48 h.
@@ -95,7 +100,7 @@ JSON, lecture seule, protégée par la session (sauf `health`) :
 | Route | Contenu |
 |---|---|
 | `GET /api/v1/health` | état du service |
-| `GET /api/v1/metrics/current` | dernières valeurs, unités, `null` si indisponible |
+| `GET /api/v1/metrics/current` | dernières valeurs, unités, `null` si indisponible ; `disks` (points de montage) et `top_ram` (applications) |
 | `GET /api/v1/metrics/history?period=&key=` | courbes horodatées |
 | `GET /api/v1/metrics/stats?period=&key=` | min / max / moyenne |
 | `GET /api/v1/metrics/events?period=` | événements ventilateur et throttling |
@@ -145,7 +150,7 @@ Pour ajouter une métrique : une méthode dans `Sensors`, une série dans `Histo
 
 ## État du projet
 
-- 180 tests automatiques, qui ne nécessitent aucun Raspberry Pi (les lectures `/sys` et `/proc` sont testées sur des arbres de fichiers simulés ; le serveur est testé avec de vraies sockets sur un port éphémère ; la logique de l'interface Web est testée avec Node si présent).
+- Plus de 180 tests automatiques, qui ne nécessitent aucun Raspberry Pi (les lectures `/sys` et `/proc` sont testées sur des arbres de fichiers simulés ; le serveur est testé avec de vraies sockets sur un port éphémère ; la logique de l'interface Web est testée avec Node si présent).
 - Le mode démo a été vérifié dans un vrai terminal sur Mac, et la compilation croisée pour le Pi fonctionne.
 - Le service et l'interface Web tournent sur un vrai Raspberry Pi 5 (capture ci-dessus) ; ils ont aussi été vérifiés sur Mac en mode démo (navigateur ordinateur et téléphone, perte de connexion, arrêt par SIGTERM).
 - **À valider** : l'exécution complète sur un vrai Raspberry Pi 5 (chemins sysfs, `vcgencmd`, service systemd), la mesure de la consommation CPU / RAM / disque du service, et la comparaison de performances avec la version Python (mémoire, CPU, démarrage).

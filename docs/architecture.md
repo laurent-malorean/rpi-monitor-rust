@@ -32,7 +32,7 @@ Le collecteur ignore ses clients : fermer un navigateur, arrêter le serveur ou 
 | Route | Contenu |
 |---|---|
 | `GET /health` | état, uptime, mode démo (public, sans données) |
-| `GET /metrics/current` | dernière valeur, libellé, unité des 8 indicateurs ; `null` si indisponible ; détails ventilateur et throttling |
+| `GET /metrics/current` | dernière valeur, libellé, unité des 8 indicateurs ; `null` si indisponible ; détails ventilateur et throttling ; `disks` (points de montage) et `top_ram` (applications), derniers relevés sans historique |
 | `GET /metrics/history?period=&key=&max_points=` | points `[ts, moyenne, min, max]`, rééchantillonnés à `max_points` (600 par défaut) en gardant pics et trous |
 | `GET /metrics/stats?period=&key=` | min / max / moyenne sur la période |
 | `GET /metrics/events?period=` | intervalles d'activité du ventilateur et du throttling |
